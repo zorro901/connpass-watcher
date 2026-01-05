@@ -11,11 +11,8 @@ on:
       dry_run:
         description: 'Dry run (do not register to calendar)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
-
-env:
-  NODE_VERSION: '20'
 
 jobs:
   scan:
@@ -25,17 +22,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: bun run build
 
       - name: Create config directory
         run: mkdir -p ~/.connpass-watcher

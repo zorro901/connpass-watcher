@@ -13,8 +13,8 @@ connpassの東京・オンライン開催イベントを監視し、登壇機会
 ## インストール
 
 ```bash
-npm install
-npm run build
+bun install
+bun run build
 ```
 
 ## 設定
@@ -140,7 +140,7 @@ Actions タブから "Scan Connpass Events" → "Run workflow" で手動実行�
 |-----------|---------|---------|
 | anthropic | claude-sonnet-4-20250514 | `ANTHROPIC_API_KEY` |
 | openai | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| google | gemini-1.5-flash | `GOOGLE_API_KEY` |
+| google | gemini-2.5-flash-preview-05-20 | `GOOGLE_API_KEY` |
 | ollama | llama3.2, mistral | (ローカル実行) |
 
 ### OpenAI互換API
@@ -158,16 +158,16 @@ llm:
 
 ```bash
 # 型チェック
-npm run typecheck
+bun run typecheck
 
 # Lint
-npm run lint
+bun run lint
 
 # フォーマット
-npm run format
+bun run format
 
 # ビルド
-npm run build
+bun run build
 ```
 
 ## ライセンス
