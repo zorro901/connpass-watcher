@@ -1,0 +1,123 @@
+name: Scan Connpass Events
+
+on:
+  # 毎日9時(JST)に実行 = UTC 0時
+  schedule:
+    - cron: '0 0 * * *'
+
+  # 手動実行も可能
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not register to calendar)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Create config directory
+        run: mkdir -p ~/.connpass-watcher
+
+      - name: Setup config file
+        run: |
+          cat > ~/.connpass-watcher/config.yaml << 'EOF'
+          connpass:
+            api_key: "${{ secrets.CONNPASS_API_KEY }}"
+            prefectures:
+              - tokyo
+            include_online: true
+            months_ahead: 2
+
+          interests:
+            keywords: ${{ vars.INTEREST_KEYWORDS || '["TypeScript", "Rust", "Go", "AI", "LLM"]' }}
+            profile: |
+              ${{ vars.INTEREST_PROFILE || 'Software engineer interested in web development and AI.' }}
+
+          speaker:
+            check_participant_types: true
+            check_cfp: true
+
+          llm:
+            enabled: ${{ vars.LLM_ENABLED || 'true' }}
+            provider: ${{ vars.LLM_PROVIDER || 'anthropic' }}
+            model: ${{ vars.LLM_MODEL || '' }}
+
+          google_calendar:
+            enabled: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+            calendar_id: ${{ vars.GOOGLE_CALENDAR_ID || 'primary' }}
+
+          schedule:
+            cron: "0 9 * * *"
+          EOF
+
+      - name: Setup Google Calendar credentials
+        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+        run: |
+          echo '${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}' | base64 -d > ~/.connpass-watcher/credentials.json
+
+      - name: Setup Google Calendar tokens
+        if: ${{ secrets.GOOGLE_CALENDAR_TOKENS != '' }}
+        run: |
+          echo '${{ secrets.GOOGLE_CALENDAR_TOKENS }}' | base64 -d > ~/.connpass-watcher/tokens.json
+
+      - name: Restore database cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.connpass-watcher/events.db
+          key: connpass-db-${{ github.run_id }}
+          restore-keys: |
+            connpass-db-
+
+      - name: Run scan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            node dist/index.js scan --dry-run --json > scan-results.json
+          else
+            node dist/index.js scan --json > scan-results.json
+          fi
+
+      - name: Display results
+        run: |
+          echo "=== Scan Results ==="
+          cat scan-results.json | jq '.'
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-results-${{ github.run_id }}
+          path: scan-results.json
+          retention-days: 30
+
+      - name: Save updated tokens
+        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' && always() }}
+        run: |
+          if [ -f ~/.connpass-watcher/tokens.json ]; then
+            echo "Updated tokens (base64):"
+            base64 < ~/.connpass-watcher/tokens.json
+          fi

@@ -1,0 +1,71 @@
+# connpass-watcher configuration
+# Copy this file to config.yaml and customize
+
+connpass:
+  # API key for connpass API v2 (required)
+  # Get your API key from: https://connpass.com/settings/api/
+  api_key: "your-connpass-api-key"
+  # Prefectures to monitor (v2 API filter)
+  # Available: tokyo, osaka, hokkaido, online, etc.
+  prefectures:
+    - tokyo
+  # Include online events
+  include_online: true
+  # How many months ahead to fetch events
+  months_ahead: 2
+
+interests:
+  # Keywords to match in event titles and descriptions
+  keywords:
+    - TypeScript
+    - Rust
+    - Go
+    - AI
+    - LLM
+    - React
+    - Next.js
+  # Your profile for LLM-based matching (optional)
+  profile: |
+    Software engineer interested in TypeScript, Rust, and AI/ML.
+    Looking for speaking opportunities at LT events.
+
+speaker:
+  # Check if event has speaker/LT participation slots
+  check_participant_types: true
+  # Check for CFP (Call for Proposals) in event description
+  check_cfp: true
+
+llm:
+  # Set to false to disable LLM matching (keyword-only mode)
+  enabled: true
+
+  # LLM provider: anthropic, openai, google, ollama
+  provider: anthropic
+
+  # Model name (optional, uses provider default if not specified)
+  # Anthropic: claude-sonnet-4-20250514, claude-3-5-haiku-20241022
+  # OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo
+  # Google: gemini-1.5-flash, gemini-1.5-pro
+  # Ollama: llama3.2, mistral, etc.
+  # model: claude-sonnet-4-20250514
+
+  # API key (optional, uses environment variable if not set)
+  # Anthropic: ANTHROPIC_API_KEY
+  # OpenAI: OPENAI_API_KEY
+  # Google: GOOGLE_API_KEY or GEMINI_API_KEY
+  # api_key: "your-api-key"
+
+  # Base URL for OpenAI-compatible APIs (optional)
+  # Use this for Groq, Together, Azure OpenAI, etc.
+  # base_url: "https://api.groq.com/openai/v1"
+
+google_calendar:
+  # Calendar ID to add events to
+  calendar_id: primary
+  # Set to false to disable calendar integration
+  enabled: true
+
+schedule:
+  # Cron expression for scheduled runs (optional)
+  # Example: "0 9 * * *" = every day at 9 AM
+  cron: "0 9 * * *"
