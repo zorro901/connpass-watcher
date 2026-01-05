@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { type Config, configSchema, defaultConfig } from "./schema.js";
+import { type Config, configSchema } from "./schema.js";
 
 const CONFIG_FILENAME = "config.yaml";
 const APP_DIR = ".connpass-watcher";
@@ -24,7 +24,9 @@ export function loadConfig(customPath?: string): Config {
   const configPath = customPath ?? findConfigPath();
 
   if (!configPath) {
-    return defaultConfig;
+    throw new Error(
+      "Config file not found. Create ~/.connpass-watcher/config.yaml or ./config.yaml",
+    );
   }
 
   if (!existsSync(configPath)) {
