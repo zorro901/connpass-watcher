@@ -26,8 +26,12 @@ export class OpenRouterProvider implements LLMProvider {
     this.client = new OpenAI({
       apiKey,
       baseURL: config.baseUrl || "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://github.com/connpass-watcher",
+        "X-Title": "connpass-watcher",
+      },
     });
-    logger.debug({ model: this.model }, "OpenRouter provider initialized");
+    logger.debug({ model: this.model, hasApiKey: !!apiKey }, "OpenRouter provider initialized");
   }
 
   async generateText(prompt: string): Promise<string> {
