@@ -1,4 +1,4 @@
-import { addMonths, format } from "date-fns";
+import { addMonths, addWeeks, format } from "date-fns";
 import type { Config } from "../config/schema.js";
 import { createChildLogger } from "../utils/logger.js";
 import { connpassRateLimiter } from "../utils/rate-limiter.js";
@@ -70,18 +70,29 @@ export class ConnpassClient {
   }
 
   /**
-   * 今月から指定月数先までの年月リストを生成
+   * 今日から指定期間先までの日付リストを生成
+   * weeks_ahead が指定されていればそちらを優先、なければ months_ahead を使用
    */
-  private getTargetMonths(): string[] {
-    const months: string[] = [];
-    const now = new Date();
+  private getTargetDates(): string[] {
+    const dates: string[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    for (let i = 0; i < this.config.connpass.months_ahead; i++) {
-      const targetDate = addMonths(now, i);
-      months.push(format(targetDate, "yyyyMM"));
+    const { weeks_ahead, months_ahead } = this.config.connpass;
+    let endDate: Date;
+    if (weeks_ahead !== undefined) {
+      endDate = addWeeks(today, weeks_ahead);
+    } else {
+      endDate = addMonths(today, months_ahead ?? 1);
     }
 
-    return months;
+    let current = new Date(today);
+    while (current < endDate) {
+      dates.push(format(current, "yyyyMMdd"));
+      current.setDate(current.getDate() + 1);
+    }
+
+    return dates;
   }
 
   /**
@@ -129,17 +140,23 @@ export class ConnpassClient {
    * 設定に基づいてイベントをフィルタリング
    */
   private filterEvents(events: EnrichedEvent[]): EnrichedEvent[] {
+    // 今日の0時0分を基準に過去イベントを判定
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     return events.filter((event) => {
-      // オンラインイベントは include_online が true の場合のみ
+      const eventDate = new Date(event.started_at);
+      // 今日より前のイベントを除外（今日のイベントは含む）
+      if (eventDate < today) {
+        return false;
+      }
+
+      // オンラインイベントは include_online が false の場合は除外
       if (event.is_online && !this.config.connpass.include_online) {
         return false;
       }
 
-      // 東京またはオンラインのイベントのみ
-      if (!event.is_tokyo && !event.is_online) {
-        return false;
-      }
-
+      // prefecture は API で指定済みなので追加フィルタ不要
       return true;
     });
   }
@@ -167,20 +184,20 @@ export class ConnpassClient {
    * イベントを取得
    */
   async getEvents(): Promise<EnrichedEvent[]> {
-    const targetMonths = this.getTargetMonths();
+    const targetDates = this.getTargetDates();
     const prefectures = this.getTargetPrefectures();
     const allEvents: ConnpassEvent[] = [];
 
-    logger.info({ months: targetMonths, prefectures }, "Fetching events");
+    logger.info({ dateRange: `${targetDates[0]} - ${targetDates[targetDates.length - 1]}`, prefectures }, "Fetching events");
 
-    // 各月のイベントを取得 (v2 APIは都道府県でフィルタ可能)
-    for (const ym of targetMonths) {
+    // 日付ごとに個別リクエスト（複数日まとめると100件制限で取得漏れが発生するため）
+    const count = 100;
+    for (const date of targetDates) {
       let start = 1;
-      const count = 100;
 
       while (true) {
         const response = await this.fetchEvents({
-          ym,
+          ymd: [date],
           prefecture: prefectures,
           count,
           start,
@@ -198,7 +215,7 @@ export class ConnpassClient {
 
         // 安全のため最大500件まで
         if (start > 500) {
-          logger.warn({ ym }, "Reached max events limit for month");
+          logger.warn({ date }, "Reached max events limit for date");
           break;
         }
       }

@@ -1,21 +1,22 @@
-# connpass-watcher configuration
-# Copy this file to config.yaml and customize
+# connpass-watcher 設定ファイル
+# このファイルを config.yaml にコピーして編集してください
 
 connpass:
-  # API key for connpass API v2 (required)
-  # Get your API key from: https://connpass.com/settings/api/
+  # connpass API v2 の APIキー（必須）
+  # 取得先: https://connpass.com/settings/api/
   api_key: "your-connpass-api-key"
-  # Prefectures to monitor (v2 API filter)
-  # Available: tokyo, osaka, hokkaido, online, etc.
+  # 監視する都道府県（v2 API フィルタ）
+  # 指定可能: tokyo, osaka, hokkaido, online など
   prefectures:
     - tokyo
-  # Include online events
+  # オンラインイベントを含める
   include_online: true
-  # How many months ahead to fetch events
-  months_ahead: 2
+  # 検索期間（どちらか一方を指定、weeks_ahead が優先）
+  # weeks_ahead: 2   # 何週間先まで
+  months_ahead: 1    # 何ヶ月先まで
 
 interests:
-  # Keywords to match in event titles and descriptions
+  # タイトル・説明文でマッチさせるキーワード（任意）
   keywords:
     - TypeScript
     - Rust
@@ -24,48 +25,56 @@ interests:
     - LLM
     - React
     - Next.js
-  # Your profile for LLM-based matching (optional)
+  # タイトルにこれらが含まれるイベントは除外
+  exclude_keywords:
+    - 輪読会
+    - 読書会
+    - もくもく会
+  # LLM判定用のプロフィール
   profile: |
-    Software engineer interested in TypeScript, Rust, and AI/ML.
-    Looking for speaking opportunities at LT events.
-
-speaker:
-  # Check if event has speaker/LT participation slots
-  check_participant_types: true
-  # Check for CFP (Call for Proposals) in event description
-  check_cfp: true
+    TypeScript, Rust, AI/ML に興味があるソフトウェアエンジニア。
+    LTイベントでの登壇機会を探している。
+  # この人数以上のイベントは人気イベントとして無条件で登録
+  # LLM判定をスキップして直接カレンダーに追加
+  min_participants: 50
 
 llm:
-  # Set to false to disable LLM matching (keyword-only mode)
+  # false にすると LLM 判定を無効化
+  # 無効時は人気イベント（50人以上）のみ登録される
   enabled: true
 
-  # LLM provider: anthropic, openai, google, ollama
-  provider: anthropic
+  # LLM プロバイダ: anthropic, openai, google, ollama
+  provider: google
 
-  # Model name (optional, uses provider default if not specified)
+  # モデル名（省略時はプロバイダのデフォルトを使用）
   # Anthropic: claude-sonnet-4-20250514, claude-3-5-haiku-20241022
   # OpenAI: gpt-4o, gpt-4o-mini, gpt-4-turbo
-  # Google: gemini-1.5-flash, gemini-1.5-pro
-  # Ollama: llama3.2, mistral, etc.
-  # model: claude-sonnet-4-20250514
+  # Google: gemini-2.0-flash, gemini-1.5-flash, gemini-1.5-pro
+  # Ollama: llama3.2, mistral など
+  model: gemini-3-flash-preview
 
-  # API key (optional, uses environment variable if not set)
+  # APIキー（省略時は環境変数を使用）
   # Anthropic: ANTHROPIC_API_KEY
   # OpenAI: OPENAI_API_KEY
-  # Google: GOOGLE_API_KEY or GEMINI_API_KEY
+  # Google: GOOGLE_API_KEY または GEMINI_API_KEY
   # api_key: "your-api-key"
 
-  # Base URL for OpenAI-compatible APIs (optional)
-  # Use this for Groq, Together, Azure OpenAI, etc.
+  # OpenAI互換APIのベースURL（任意）
+  # Groq, Together, Azure OpenAI などで使用
   # base_url: "https://api.groq.com/openai/v1"
 
 google_calendar:
-  # Calendar ID to add events to
-  calendar_id: primary
-  # Set to false to disable calendar integration
+  # false にするとカレンダー連携を無効化
   enabled: true
+  # イベントを登録するカレンダーID
+  calendar_id: primary
+  # カテゴリ別のイベント色（Google Calendar の色ID）
+  # 参照: https://developers.google.com/calendar/api/v3/reference/colors
+  color_popular: "6"   # 🔥 人気イベント（50人以上）- みかん色
+  color_speaker: "9"   # 🎤 登壇機会あり - ブルーベリー色
+  # 興味マッチのみのイベントはカレンダーのデフォルト色
 
 schedule:
-  # Cron expression for scheduled runs (optional)
-  # Example: "0 9 * * *" = every day at 9 AM
+  # 定期実行のcron式（任意）
+  # 例: "0 9 * * *" = 毎日9時
   cron: "0 9 * * *"

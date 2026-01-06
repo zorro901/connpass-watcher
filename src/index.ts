@@ -9,9 +9,7 @@ import { ConnpassClient } from "./connpass/client.js";
 import type { EnrichedEvent } from "./connpass/types.js";
 import { EventRepository } from "./db/events.js";
 import { initializeDatabase } from "./db/schema.js";
-import { matchKeywords } from "./matcher/keyword.js";
 import { LLMMatcher } from "./matcher/llm.js";
-import { enrichWithSpeakerOpportunity } from "./matcher/speaker.js";
 import { logger } from "./utils/logger.js";
 
 const APP_DIR = ".connpass-watcher";
@@ -25,8 +23,18 @@ interface ScanOptions {
 
 interface ScanResult {
   event: EnrichedEvent;
-  action: "registered" | "skipped" | "already_processed" | "no_match";
+  action: "registered" | "skipped" | "already_processed" | "excluded" | "filtered" | "no_match";
   calendarEventId?: string;
+  colorId?: string;
+  category?: "popular" | "speaker" | "interest";
+}
+
+/**
+ * 除外キーワードに該当するかチェック
+ */
+function shouldExclude(event: EnrichedEvent, excludeKeywords: string[]): boolean {
+  const title = event.title.toLowerCase();
+  return excludeKeywords.some((kw) => title.includes(kw.toLowerCase()));
 }
 
 /**
@@ -61,42 +69,76 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
   // イベントを保存
   eventRepo.saveEvents(events);
 
+  const minParticipants = config.interests.min_participants;
+  const excludeKeywords = config.interests.exclude_keywords;
+
   // 各イベントを処理
   for (const event of events) {
+    // event は既に EnrichedEvent で is_online, is_tokyo が設定済み
+
     // 処理済みチェック
     if (eventRepo.isProcessed(event.id)) {
       results.push({ event, action: "already_processed" });
       continue;
     }
 
-    // 登壇可能性を判定
-    const enrichedEvent = enrichWithSpeakerOpportunity(event, config);
-
-    // キーワードマッチング
-    const keywordResult = matchKeywords(event, config);
-
-    // LLMマッチング (キーワードマッチした場合、または登壇可能性がある場合)
-    let interestMatch = keywordResult;
-    if (
-      config.llm.enabled &&
-      (keywordResult.is_match || enrichedEvent.speaker_opportunity?.has_opportunity)
-    ) {
-      interestMatch = await llmMatcher.matchInterest(event, keywordResult);
+    // 2. 除外キーワードチェック
+    if (shouldExclude(event, excludeKeywords)) {
+      logger.debug({ eventId: event.id, title: event.title }, "Excluded by keyword");
+      results.push({ event, action: "excluded" });
+      continue;
     }
 
-    enrichedEvent.interest_match = interestMatch;
+    // 3. 人気イベント判定 (50人以上)
+    const isPopular = event.accepted >= minParticipants;
+
+    let hasSpeakerOpportunity = false;
+    let isInterested = false;
+
+    if (isPopular) {
+      // 人気イベントはLLM判定なしで興味ありとみなす
+      isInterested = true;
+      event.interest_match = {
+        is_match: true,
+        score: 80,
+        keyword_matches: [`人気(${event.accepted}人)`],
+      };
+      logger.info({ eventId: event.id, title: event.title, accepted: event.accepted }, "Popular event");
+    } else {
+      // 4. 50人以下はLLMで判断
+      const llmResult = await llmMatcher.analyzeEvent(event);
+      event.interest_match = llmResult.interest;
+      event.speaker_opportunity = llmResult.speaker;
+      hasSpeakerOpportunity = llmResult.speaker.has_opportunity;
+      isInterested = llmResult.interest.is_match;
+    }
 
     // マッチしない場合はスキップ
-    if (!interestMatch.is_match && !enrichedEvent.speaker_opportunity?.has_opportunity) {
+    if (!isInterested && !hasSpeakerOpportunity) {
       eventRepo.markProcessed({
         eventId: event.id,
         hasSpeakerOpportunity: false,
         hasInterestMatch: false,
-        interestScore: interestMatch.score,
+        interestScore: event.interest_match?.score ?? 0,
       });
-      results.push({ event: enrichedEvent, action: "no_match" });
+      results.push({ event, action: "no_match" });
       continue;
     }
+
+    // カテゴリと色の決定 (優先順: 登壇 > 人気 > 興味)
+    let category: "popular" | "speaker" | "interest";
+    if (hasSpeakerOpportunity) {
+      category = "speaker";
+    } else if (isPopular) {
+      category = "popular";
+    } else {
+      category = "interest";
+    }
+
+    const colorId = calendarClient.getColorId({
+      hasSpeakerOpportunity,
+      isPopular,
+    });
 
     // カレンダーに登録
     let calendarEventId: string | undefined;
@@ -105,9 +147,9 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
         const isAuth = await calendarClient.isAuthenticated();
         if (isAuth) {
           // 重複チェック
-          const exists = await calendarClient.eventExists(enrichedEvent);
+          const exists = await calendarClient.eventExists(event);
           if (!exists) {
-            calendarEventId = (await calendarClient.addEvent(enrichedEvent)) ?? undefined;
+            calendarEventId = (await calendarClient.addEvent(event, colorId ? { colorId } : undefined)) ?? undefined;
           }
         }
       } catch (error) {
@@ -118,16 +160,20 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
     // 処理済みとしてマーク
     eventRepo.markProcessed({
       eventId: event.id,
-      hasSpeakerOpportunity: enrichedEvent.speaker_opportunity?.has_opportunity ?? false,
-      hasInterestMatch: interestMatch.is_match,
-      interestScore: interestMatch.score,
+      hasSpeakerOpportunity,
+      hasInterestMatch: isInterested,
+      interestScore: event.interest_match?.score ?? 0,
       ...(calendarEventId ? { calendarEventId } : {}),
     });
 
     const result: ScanResult = {
-      event: enrichedEvent,
+      event,
       action: calendarEventId ? "registered" : "skipped",
+      category,
     };
+    if (colorId) {
+      result.colorId = colorId;
+    }
     if (calendarEventId) {
       result.calendarEventId = calendarEventId;
     }
@@ -136,6 +182,22 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
 
   db.close();
   return results;
+}
+
+/**
+ * カテゴリのアイコンを取得
+ */
+function getCategoryIcon(category?: "popular" | "speaker" | "interest"): string {
+  switch (category) {
+    case "speaker":
+      return "🎤"; // ブルーベリー
+    case "popular":
+      return "🔥"; // みかん
+    case "interest":
+      return "💡"; // デフォルト
+    default:
+      return "📅";
+  }
 }
 
 /**
@@ -156,6 +218,7 @@ function displayResults(results: ScanResult[], json: boolean): void {
           speaker_opportunity: r.event.speaker_opportunity,
           interest_match: r.event.interest_match,
           action: r.action,
+          category: r.category,
           calendar_event_id: r.calendarEventId,
         })),
         null,
@@ -168,9 +231,12 @@ function displayResults(results: ScanResult[], json: boolean): void {
   console.log("\n=== Scan Results ===\n");
   console.log(`Total events: ${results.length}`);
   console.log(`Matched: ${matched.length}`);
-  console.log(
-    `Already processed: ${results.filter((r) => r.action === "already_processed").length}`,
-  );
+  console.log(`  🎤 Speaker: ${matched.filter((r) => r.category === "speaker").length}`);
+  console.log(`  🔥 Popular: ${matched.filter((r) => r.category === "popular").length}`);
+  console.log(`  💡 Interest: ${matched.filter((r) => r.category === "interest").length}`);
+  console.log(`Filtered: ${results.filter((r) => r.action === "filtered").length}`);
+  console.log(`Excluded: ${results.filter((r) => r.action === "excluded").length}`);
+  console.log(`Already processed: ${results.filter((r) => r.action === "already_processed").length}`);
   console.log(`No match: ${results.filter((r) => r.action === "no_match").length}`);
   console.log();
 
@@ -184,22 +250,23 @@ function displayResults(results: ScanResult[], json: boolean): void {
 
   for (const result of matched) {
     const { event } = result;
-    const speakerIcon = event.speaker_opportunity?.has_opportunity ? "" : "";
-    const locationIcon = event.is_online ? "" : "";
+    const categoryIcon = getCategoryIcon(result.category);
+    const locationIcon = event.is_online ? "🌐" : "📍";
 
-    console.log(`\n${speakerIcon} ${event.title}`);
+    console.log(`\n${categoryIcon} ${event.title}`);
     console.log(`   ${locationIcon} ${event.place ?? "オンライン"}`);
-    console.log(`    ${event.started_at}`);
-    console.log(`    ${event.url}`);
+    console.log(`   📅 ${event.started_at}`);
+    console.log(`   🔗 ${event.url}`);
+    console.log(`   👥 ${event.accepted}人参加`);
 
     if (event.speaker_opportunity?.has_opportunity) {
-      console.log(`    登壇機会: ${event.speaker_opportunity.detected_keywords.join(", ")}`);
+      console.log(`   🎤 登壇機会: ${event.speaker_opportunity.detected_keywords.join(", ")}`);
     }
 
     if (event.interest_match) {
-      console.log(`    スコア: ${event.interest_match.score}/100`);
+      console.log(`   📊 スコア: ${event.interest_match.score}/100`);
       if (event.interest_match.llm_reason) {
-        console.log(`    理由: ${event.interest_match.llm_reason}`);
+        console.log(`   💬 理由: ${event.interest_match.llm_reason}`);
       }
     }
 

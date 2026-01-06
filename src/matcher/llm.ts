@@ -1,5 +1,5 @@
 import type { Config } from "../config/schema.js";
-import type { ConnpassEvent, InterestMatch } from "../connpass/types.js";
+import type { ConnpassEvent, InterestMatch, SpeakerOpportunity } from "../connpass/types.js";
 import { createLLMProvider, getDefaultModel } from "../llm/factory.js";
 import type { LLMProvider } from "../llm/types.js";
 import { createChildLogger } from "../utils/logger.js";
@@ -17,7 +17,15 @@ function stripHtml(html: string): string {
 }
 
 /**
- * LLMベースの興味マッチング
+ * LLM分析結果
+ */
+export interface LLMAnalysisResult {
+  interest: InterestMatch;
+  speaker: SpeakerOpportunity;
+}
+
+/**
+ * LLMベースのイベント分析
  */
 export class LLMMatcher {
   private provider: LLMProvider;
@@ -37,24 +45,32 @@ export class LLMMatcher {
   }
 
   /**
-   * イベントが興味にマッチするかをLLMで判定
+   * イベントを分析（興味マッチング + 登壇機会検出）
    */
-  async matchInterest(event: ConnpassEvent, keywordResult: InterestMatch): Promise<InterestMatch> {
-    const profile = this.config.interests.profile;
-
-    if (!profile) {
-      logger.debug({ eventId: event.id }, "No profile configured, using keyword result only");
-      return keywordResult;
-    }
+  async analyzeEvent(event: ConnpassEvent): Promise<LLMAnalysisResult> {
+    const defaultResult: LLMAnalysisResult = {
+      interest: {
+        is_match: false,
+        score: 0,
+        keyword_matches: [],
+      },
+      speaker: {
+        has_opportunity: false,
+        has_lt_slot: false,
+        has_cfp: false,
+        detected_keywords: [],
+      },
+    };
 
     if (!this.config.llm.enabled) {
-      logger.debug({ eventId: event.id }, "LLM disabled, using keyword result only");
-      return keywordResult;
+      logger.debug({ eventId: event.id }, "LLM disabled");
+      return defaultResult;
     }
 
-    const description = stripHtml(event.description).slice(0, 2000); // 長すぎる場合は切り詰め
+    const profile = this.config.interests.profile ?? "技術イベントに興味があるエンジニア";
+    const description = stripHtml(event.description).slice(0, 3000);
 
-    const prompt = `あなたはイベント推薦システムです。以下のイベントがユーザーの興味にマッチするかを判定してください。
+    const prompt = `あなたはイベント分析システムです。以下のイベントを分析してください。
 
 ## ユーザープロファイル
 ${profile}
@@ -65,22 +81,31 @@ ${profile}
 概要: ${description}
 開催場所: ${event.place ?? "未定"}
 開催日時: ${event.started_at}
+参加者数: ${event.accepted}人
 
-## キーワードマッチ結果
-マッチしたキーワード: ${keywordResult.keyword_matches.join(", ") || "なし"}
-キーワードスコア: ${keywordResult.score}/100
+## 分析タスク
+1. **興味マッチング**: このイベントがユーザーの興味に合うか判定
+2. **登壇機会検出**: このイベントで発表・LT・登壇する機会があるか判定
 
-## 判定基準
-1. ユーザーの興味分野とイベント内容の関連性
-2. ユーザーのスキルレベルとイベントの対象レベル
-3. 登壇機会があればボーナス
+## 登壇機会の判定基準
+- LT（ライトニングトーク）枠の募集があるか
+- スピーカー・発表者の公募があるか
+- CFP（Call for Proposals）があるか
+- 注意: 「参加者募集」「イベント参加応募」は登壇機会ではない
 
-## 出力形式
-以下のJSON形式で回答してください:
+## 出力形式（JSON）
 {
-  "is_match": true または false,
-  "score": 0-100の整数,
-  "reason": "判定理由を1-2文で"
+  "interest": {
+    "is_match": true/false,
+    "score": 0-100,
+    "reason": "判定理由"
+  },
+  "speaker": {
+    "has_opportunity": true/false,
+    "has_lt_slot": true/false,
+    "has_cfp": true/false,
+    "reason": "判定理由（登壇機会がある場合のみ）"
+  }
 }`;
 
     try {
@@ -93,33 +118,49 @@ ${profile}
       }
 
       const result = JSON.parse(jsonMatch[0]) as {
-        is_match: boolean;
-        score: number;
-        reason: string;
+        interest: {
+          is_match: boolean;
+          score: number;
+          reason: string;
+        };
+        speaker: {
+          has_opportunity: boolean;
+          has_lt_slot: boolean;
+          has_cfp: boolean;
+          reason?: string;
+        };
       };
 
       logger.debug(
         {
           eventId: event.id,
           provider: this.provider.name,
-          isMatch: result.is_match,
-          score: result.score,
+          interest: result.interest,
+          speaker: result.speaker,
         },
-        "LLM matching completed",
+        "LLM analysis completed",
       );
 
       return {
-        is_match: result.is_match,
-        score: result.score,
-        keyword_matches: keywordResult.keyword_matches,
-        llm_reason: result.reason,
+        interest: {
+          is_match: result.interest.is_match,
+          score: result.interest.score,
+          keyword_matches: [],
+          llm_reason: result.interest.reason,
+        },
+        speaker: {
+          has_opportunity: result.speaker.has_opportunity,
+          has_lt_slot: result.speaker.has_lt_slot,
+          has_cfp: result.speaker.has_cfp,
+          detected_keywords: result.speaker.reason ? [result.speaker.reason] : [],
+        },
       };
     } catch (error) {
       logger.error(
         { error, eventId: event.id, provider: this.provider.name },
-        "LLM matching failed, falling back to keyword result",
+        "LLM analysis failed",
       );
-      return keywordResult;
+      return defaultResult;
     }
   }
 }

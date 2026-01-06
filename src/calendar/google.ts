@@ -238,9 +238,33 @@ export class GoogleCalendarClient {
   }
 
   /**
+   * カレンダーIDを取得
+   */
+  getCalendarId(): string {
+    return this.config.google_calendar.calendar_id;
+  }
+
+  /**
+   * イベントの種類に応じた色IDを取得
+   * 優先順位: 登壇機会 > 人気イベント > デフォルト
+   */
+  getColorId(options: { hasSpeakerOpportunity: boolean; isPopular: boolean }): string | undefined {
+    if (options.hasSpeakerOpportunity) {
+      return this.config.google_calendar.color_speaker;
+    }
+    if (options.isPopular) {
+      return this.config.google_calendar.color_popular;
+    }
+    return undefined; // デフォルト色
+  }
+
+  /**
    * カレンダーにイベントを追加
    */
-  async addEvent(event: EnrichedEvent): Promise<string | null> {
+  async addEvent(
+    event: EnrichedEvent,
+    options?: { colorId?: string },
+  ): Promise<string | null> {
     if (!this.config.google_calendar.enabled) {
       logger.debug({ eventId: event.id }, "Calendar integration disabled");
       return null;
@@ -249,11 +273,13 @@ export class GoogleCalendarClient {
     const client = await this.initOAuth2Client();
     const calendar = google.calendar({ version: "v3", auth: client });
 
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
     // イベントの説明文を作成
     const description = [
       `connpass URL: ${event.url}`,
       "",
-      event.speaker_opportunity?.has_opportunity ? "登壇可能性: あり" : "",
+      event.speaker_opportunity?.has_opportunity ? "🎤 登壇可能性: あり" : "",
       event.interest_match?.llm_reason
         ? `興味マッチング理由: ${event.interest_match.llm_reason}`
         : "",
@@ -261,8 +287,16 @@ export class GoogleCalendarClient {
       .filter(Boolean)
       .join("\n");
 
-    const calendarEvent = {
-      summary: `[connpass] ${event.title}`,
+    const calendarEvent: {
+      summary: string;
+      description: string;
+      location: string | null;
+      start: { dateTime: string; timeZone: string };
+      end: { dateTime: string; timeZone: string };
+      source: { title: string; url: string };
+      colorId?: string;
+    } = {
+      summary: event.title,
       description,
       location: event.place ?? null,
       start: {
@@ -279,10 +313,15 @@ export class GoogleCalendarClient {
       },
     };
 
+    // 色を設定
+    if (options?.colorId) {
+      calendarEvent.colorId = options.colorId;
+    }
+
     try {
       const result = await googleCalendarRateLimiter.schedule(() =>
         calendar.events.insert({
-          calendarId: this.config.google_calendar.calendar_id,
+          calendarId: targetCalendarId,
           requestBody: calendarEvent,
         }),
       );
@@ -292,6 +331,7 @@ export class GoogleCalendarClient {
         {
           eventId: event.id,
           calendarEventId,
+          calendarId: targetCalendarId,
         },
         "Event added to Google Calendar",
       );
@@ -310,10 +350,12 @@ export class GoogleCalendarClient {
     const client = await this.initOAuth2Client();
     const calendar = google.calendar({ version: "v3", auth: client });
 
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
     try {
       const result = await googleCalendarRateLimiter.schedule(() =>
         calendar.events.list({
-          calendarId: this.config.google_calendar.calendar_id,
+          calendarId: targetCalendarId,
           timeMin: event.started_at,
           timeMax: event.ended_at,
           q: event.title,
@@ -325,7 +367,7 @@ export class GoogleCalendarClient {
       const exists = events.some((e) => e.summary?.includes(event.title));
 
       if (exists) {
-        logger.debug({ eventId: event.id }, "Event already exists in calendar");
+        logger.debug({ eventId: event.id, calendarId: targetCalendarId }, "Event already exists in calendar");
       }
 
       return exists;

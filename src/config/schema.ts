@@ -5,20 +5,19 @@ export const configSchema = z.object({
     api_key: z.string().min(1, "connpass API key is required"),
     prefectures: z.array(z.string()).default(["tokyo"]),
     include_online: z.boolean().default(true),
-    months_ahead: z.number().min(1).max(12).default(2),
+    // 検索期間: weeks_ahead が指定されていればそちらを優先
+    months_ahead: z.number().min(1).max(12).optional(),
+    weeks_ahead: z.number().min(1).max(52).optional(),
   }),
 
   interests: z
     .object({
       keywords: z.array(z.string()).default([]),
+      // 除外キーワード（タイトルに含まれていたらスキップ）
+      exclude_keywords: z.array(z.string()).default([]),
       profile: z.string().optional(),
-    })
-    .default({}),
-
-  speaker: z
-    .object({
-      check_participant_types: z.boolean().default(true),
-      check_cfp: z.boolean().default(true),
+      // 参加者数がこの値以上なら人気イベントとして興味ありとみなす
+      min_participants: z.number().min(0).default(50),
     })
     .default({}),
 
@@ -34,8 +33,13 @@ export const configSchema = z.object({
 
   google_calendar: z
     .object({
-      calendar_id: z.string().default("primary"),
       enabled: z.boolean().default(true),
+      calendar_id: z.string().default("primary"),
+      // Google Calendar の色ID
+      // 6: Tangerine (みかん), 9: Blueberry (ブルーベリー)
+      color_popular: z.string().default("6"), // 人気イベント
+      color_speaker: z.string().default("9"), // 登壇機会あり
+      // 興味マッチのみはデフォルト色（colorIdなし）
     })
     .default({}),
 

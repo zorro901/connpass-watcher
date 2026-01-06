@@ -140,7 +140,7 @@ Actions タブから "Scan Connpass Events" → "Run workflow" で手動実行�
 |-----------|---------|---------|
 | anthropic | claude-sonnet-4-20250514 | `ANTHROPIC_API_KEY` |
 | openai | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| google | gemini-2.5-flash-preview-05-20 | `GOOGLE_API_KEY` |
+| google | gemini-2.5-flash, gemini-3-flash | `GOOGLE_API_KEY` |
 | ollama | llama3.2, mistral | (ローカル実行) |
 
 ### OpenAI互換API
