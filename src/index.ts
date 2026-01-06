@@ -23,7 +23,7 @@ interface ScanOptions {
 
 interface ScanResult {
   event: EnrichedEvent;
-  action: "registered" | "skipped" | "already_processed" | "excluded" | "filtered" | "no_match";
+  action: "registered" | "updated" | "skipped" | "already_processed" | "excluded" | "filtered" | "no_match";
   calendarEventId?: string;
   colorId?: string;
   category?: "popular" | "speaker" | "interest";
@@ -76,10 +76,18 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
   for (const event of events) {
     // event は既に EnrichedEvent で is_online, is_tokyo が設定済み
 
-    // 処理済みチェック
-    if (eventRepo.isProcessed(event.id)) {
+    // 処理済みチェック & 更新検知
+    const isProcessed = eventRepo.isProcessed(event.id);
+    const needsReprocessing = isProcessed && eventRepo.needsReprocessing(event.id, event.updated_at);
+    const existingRecord = isProcessed ? eventRepo.getProcessedEvent(event.id) : null;
+
+    if (isProcessed && !needsReprocessing) {
       results.push({ event, action: "already_processed" });
       continue;
+    }
+
+    if (needsReprocessing) {
+      logger.info({ eventId: event.id, title: event.title }, "Event updated, reprocessing");
     }
 
     // 2. 除外キーワードチェック
@@ -120,6 +128,7 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
         hasSpeakerOpportunity: false,
         hasInterestMatch: false,
         interestScore: event.interest_match?.score ?? 0,
+        connpassUpdatedAt: event.updated_at,
       });
       results.push({ event, action: "no_match" });
       continue;
@@ -140,20 +149,28 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
       isPopular,
     });
 
-    // カレンダーに登録
-    let calendarEventId: string | undefined;
+    // カレンダーに登録または更新
+    let calendarEventId: string | undefined = existingRecord?.calendar_event_id ?? undefined;
+    let isUpdated = false;
     if (!options.dryRun && config.google_calendar.enabled) {
       try {
         const isAuth = await calendarClient.isAuthenticated();
         if (isAuth) {
-          // 重複チェック
-          const exists = await calendarClient.eventExists(event);
-          if (!exists) {
-            calendarEventId = (await calendarClient.addEvent(event, colorId ? { colorId } : undefined)) ?? undefined;
+          if (needsReprocessing && calendarEventId) {
+            // 既存のカレンダーイベントを更新
+            await calendarClient.updateEvent(calendarEventId, event, colorId ? { colorId } : undefined);
+            isUpdated = true;
+            logger.info({ eventId: event.id, calendarEventId }, "Calendar event updated");
+          } else if (!calendarEventId) {
+            // 新規登録 (重複チェック付き)
+            const exists = await calendarClient.eventExists(event);
+            if (!exists) {
+              calendarEventId = (await calendarClient.addEvent(event, colorId ? { colorId } : undefined)) ?? undefined;
+            }
           }
         }
       } catch (error) {
-        logger.error({ error, eventId: event.id }, "Failed to register to calendar");
+        logger.error({ error, eventId: event.id }, "Failed to register/update calendar");
       }
     }
 
@@ -163,12 +180,23 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
       hasSpeakerOpportunity,
       hasInterestMatch: isInterested,
       interestScore: event.interest_match?.score ?? 0,
+      connpassUpdatedAt: event.updated_at,
       ...(calendarEventId ? { calendarEventId } : {}),
     });
 
+    // アクションを決定
+    let action: ScanResult["action"];
+    if (isUpdated) {
+      action = "updated";
+    } else if (calendarEventId && !needsReprocessing) {
+      action = "registered";
+    } else {
+      action = "skipped";
+    }
+
     const result: ScanResult = {
       event,
-      action: calendarEventId ? "registered" : "skipped",
+      action,
       category,
     };
     if (colorId) {
@@ -204,7 +232,7 @@ function getCategoryIcon(category?: "popular" | "speaker" | "interest"): string 
  * 結果を表示
  */
 function displayResults(results: ScanResult[], json: boolean): void {
-  const matched = results.filter((r) => r.action === "registered" || r.action === "skipped");
+  const matched = results.filter((r) => r.action === "registered" || r.action === "updated" || r.action === "skipped");
 
   if (json) {
     console.log(
@@ -234,6 +262,8 @@ function displayResults(results: ScanResult[], json: boolean): void {
   console.log(`  🎤 Speaker: ${matched.filter((r) => r.category === "speaker").length}`);
   console.log(`  🔥 Popular: ${matched.filter((r) => r.category === "popular").length}`);
   console.log(`  💡 Interest: ${matched.filter((r) => r.category === "interest").length}`);
+  console.log(`  ✅ Registered: ${results.filter((r) => r.action === "registered").length}`);
+  console.log(`  🔄 Updated: ${results.filter((r) => r.action === "updated").length}`);
   console.log(`Filtered: ${results.filter((r) => r.action === "filtered").length}`);
   console.log(`Excluded: ${results.filter((r) => r.action === "excluded").length}`);
   console.log(`Already processed: ${results.filter((r) => r.action === "already_processed").length}`);
@@ -272,6 +302,8 @@ function displayResults(results: ScanResult[], json: boolean): void {
 
     if (result.action === "registered") {
       console.log(`   ✅ カレンダーに登録済み`);
+    } else if (result.action === "updated") {
+      console.log(`   🔄 カレンダーを更新済み`);
     } else if (result.action === "skipped") {
       console.log(`   ⏭️ スキップ (dry-run または認証なし)`);
     }

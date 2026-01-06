@@ -33,6 +33,7 @@ export function initializeDatabase(dbPath: string): Database.Database {
       address TEXT,
       is_online INTEGER NOT NULL DEFAULT 0,
       is_tokyo INTEGER NOT NULL DEFAULT 0,
+      connpass_updated_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -44,6 +45,7 @@ export function initializeDatabase(dbPath: string): Database.Database {
       has_interest_match INTEGER NOT NULL DEFAULT 0,
       interest_score INTEGER,
       calendar_event_id TEXT,
+      connpass_updated_at TEXT,
       processed_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (event_id) REFERENCES events(event_id)
     );
@@ -52,6 +54,18 @@ export function initializeDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_events_started_at ON events(started_at);
     CREATE INDEX IF NOT EXISTS idx_processed_events_processed_at ON processed_events(processed_at);
   `);
+
+  // マイグレーション: connpass_updated_at カラムを追加
+  try {
+    db.exec(`ALTER TABLE events ADD COLUMN connpass_updated_at TEXT`);
+  } catch {
+    // カラムが既に存在する場合は無視
+  }
+  try {
+    db.exec(`ALTER TABLE processed_events ADD COLUMN connpass_updated_at TEXT`);
+  } catch {
+    // カラムが既に存在する場合は無視
+  }
 
   logger.debug({ path: dbPath }, "Database initialized");
 

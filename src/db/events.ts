@@ -10,6 +10,7 @@ export interface ProcessedEventRecord {
   has_interest_match: number;
   interest_score: number | null;
   calendar_event_id: string | null;
+  connpass_updated_at: string | null;
   processed_at: string;
 }
 
@@ -28,8 +29,8 @@ export class EventRepository {
 
     // Prepared statements
     this.stmtUpsertEvent = db.prepare(`
-      INSERT INTO events (event_id, title, event_url, started_at, ended_at, place, address, is_online, is_tokyo, updated_at)
-      VALUES (@event_id, @title, @event_url, @started_at, @ended_at, @place, @address, @is_online, @is_tokyo, datetime('now'))
+      INSERT INTO events (event_id, title, event_url, started_at, ended_at, place, address, is_online, is_tokyo, connpass_updated_at, updated_at)
+      VALUES (@event_id, @title, @event_url, @started_at, @ended_at, @place, @address, @is_online, @is_tokyo, @connpass_updated_at, datetime('now'))
       ON CONFLICT(event_id) DO UPDATE SET
         title = @title,
         event_url = @event_url,
@@ -39,6 +40,7 @@ export class EventRepository {
         address = @address,
         is_online = @is_online,
         is_tokyo = @is_tokyo,
+        connpass_updated_at = @connpass_updated_at,
         updated_at = datetime('now')
     `);
 
@@ -47,13 +49,14 @@ export class EventRepository {
     `);
 
     this.stmtMarkProcessed = db.prepare(`
-      INSERT INTO processed_events (event_id, has_speaker_opportunity, has_interest_match, interest_score, calendar_event_id)
-      VALUES (@event_id, @has_speaker_opportunity, @has_interest_match, @interest_score, @calendar_event_id)
+      INSERT INTO processed_events (event_id, has_speaker_opportunity, has_interest_match, interest_score, calendar_event_id, connpass_updated_at)
+      VALUES (@event_id, @has_speaker_opportunity, @has_interest_match, @interest_score, @calendar_event_id, @connpass_updated_at)
       ON CONFLICT(event_id) DO UPDATE SET
         has_speaker_opportunity = @has_speaker_opportunity,
         has_interest_match = @has_interest_match,
         interest_score = @interest_score,
-        calendar_event_id = @calendar_event_id,
+        calendar_event_id = COALESCE(@calendar_event_id, calendar_event_id),
+        connpass_updated_at = @connpass_updated_at,
         processed_at = datetime('now')
     `);
 
@@ -78,6 +81,7 @@ export class EventRepository {
       address: event.address,
       is_online: event.is_online ? 1 : 0,
       is_tokyo: event.is_tokyo ? 1 : 0,
+      connpass_updated_at: event.updated_at,
     });
   }
 
@@ -120,6 +124,7 @@ export class EventRepository {
     hasInterestMatch: boolean;
     interestScore?: number;
     calendarEventId?: string;
+    connpassUpdatedAt?: string;
   }): void {
     this.stmtMarkProcessed.run({
       event_id: params.eventId,
@@ -127,9 +132,25 @@ export class EventRepository {
       has_interest_match: params.hasInterestMatch ? 1 : 0,
       interest_score: params.interestScore ?? null,
       calendar_event_id: params.calendarEventId ?? null,
+      connpass_updated_at: params.connpassUpdatedAt ?? null,
     });
 
     logger.debug({ eventId: params.eventId }, "Event marked as processed");
+  }
+
+  /**
+   * イベントが更新されていて再処理が必要かどうかを確認
+   */
+  needsReprocessing(eventId: number, currentUpdatedAt: string): boolean {
+    const processed = this.getProcessedEvent(eventId);
+    if (!processed) {
+      return false; // 未処理なので needsReprocessing ではない
+    }
+    // 保存されている updated_at と現在の updated_at を比較
+    if (!processed.connpass_updated_at) {
+      return true; // 古いデータで updated_at が保存されていない場合は再処理
+    }
+    return processed.connpass_updated_at !== currentUpdatedAt;
   }
 
   /**

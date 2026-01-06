@@ -344,6 +344,90 @@ export class GoogleCalendarClient {
   }
 
   /**
+   * カレンダーのイベントを更新
+   */
+  async updateEvent(
+    calendarEventId: string,
+    event: EnrichedEvent,
+    options?: { colorId?: string },
+  ): Promise<void> {
+    if (!this.config.google_calendar.enabled) {
+      logger.debug({ eventId: event.id }, "Calendar integration disabled");
+      return;
+    }
+
+    const client = await this.initOAuth2Client();
+    const calendar = google.calendar({ version: "v3", auth: client });
+
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
+    // イベントの説明文を作成
+    const description = [
+      `connpass URL: ${event.url}`,
+      "",
+      event.speaker_opportunity?.has_opportunity ? "🎤 登壇可能性: あり" : "",
+      event.interest_match?.llm_reason
+        ? `興味マッチング理由: ${event.interest_match.llm_reason}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const calendarEvent: {
+      summary: string;
+      description: string;
+      location: string | null;
+      start: { dateTime: string; timeZone: string };
+      end: { dateTime: string; timeZone: string };
+      source: { title: string; url: string };
+      colorId?: string;
+    } = {
+      summary: event.title,
+      description,
+      location: event.place ?? null,
+      start: {
+        dateTime: event.started_at,
+        timeZone: "Asia/Tokyo",
+      },
+      end: {
+        dateTime: event.ended_at,
+        timeZone: "Asia/Tokyo",
+      },
+      source: {
+        title: "connpass",
+        url: event.url,
+      },
+    };
+
+    // 色を設定
+    if (options?.colorId) {
+      calendarEvent.colorId = options.colorId;
+    }
+
+    try {
+      await googleCalendarRateLimiter.schedule(() =>
+        calendar.events.update({
+          calendarId: targetCalendarId,
+          eventId: calendarEventId,
+          requestBody: calendarEvent,
+        }),
+      );
+
+      logger.info(
+        {
+          eventId: event.id,
+          calendarEventId,
+          calendarId: targetCalendarId,
+        },
+        "Event updated in Google Calendar",
+      );
+    } catch (error) {
+      logger.error({ error, eventId: event.id, calendarEventId }, "Failed to update event in calendar");
+      throw error;
+    }
+  }
+
+  /**
    * 既存のイベントかどうかをチェック (タイトルと日時で判定)
    */
   async eventExists(event: EnrichedEvent): Promise<boolean> {
