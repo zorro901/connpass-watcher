@@ -1,4 +1,4 @@
-import { addMonths, addWeeks, format } from "date-fns";
+import { addHours, addMonths, addWeeks, format } from "date-fns";
 import type { Config } from "../config/schema.js";
 import { createChildLogger } from "../utils/logger.js";
 import { connpassRateLimiter } from "../utils/rate-limiter.js";
@@ -71,16 +71,19 @@ export class ConnpassClient {
 
   /**
    * 今日から指定期間先までの日付リストを生成
-   * weeks_ahead が指定されていればそちらを優先、なければ months_ahead を使用
+   * hours_ahead > weeks_ahead > months_ahead の優先順
    */
   private getTargetDates(): string[] {
     const dates: string[] = [];
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
 
-    const { weeks_ahead, months_ahead } = this.config.connpass;
+    const { hours_ahead, weeks_ahead, months_ahead } = this.config.connpass;
     let endDate: Date;
-    if (weeks_ahead !== undefined) {
+    if (hours_ahead !== undefined) {
+      endDate = addHours(now, hours_ahead);
+    } else if (weeks_ahead !== undefined) {
       endDate = addWeeks(today, weeks_ahead);
     } else {
       endDate = addMonths(today, months_ahead ?? 1);

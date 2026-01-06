@@ -50,9 +50,12 @@ jobs:
           COLOR_SPEAKER: ${{ vars.COLOR_SPEAKER }}
           MONTHS_AHEAD: ${{ vars.MONTHS_AHEAD }}
           WEEKS_AHEAD: ${{ vars.WEEKS_AHEAD }}
+          HOURS_AHEAD: ${{ vars.HOURS_AHEAD }}
         run: |
-          # weeks_ahead が設定されていれば優先、なければ months_ahead を使用
-          if [ -n "${WEEKS_AHEAD}" ]; then
+          # hours_ahead > weeks_ahead > months_ahead の優先順
+          if [ -n "${HOURS_AHEAD}" ]; then
+            SEARCH_RANGE="hours_ahead: ${HOURS_AHEAD}"
+          elif [ -n "${WEEKS_AHEAD}" ]; then
             SEARCH_RANGE="weeks_ahead: ${WEEKS_AHEAD}"
           else
             SEARCH_RANGE="months_ahead: ${MONTHS_AHEAD:-1}"

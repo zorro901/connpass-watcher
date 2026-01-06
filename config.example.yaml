@@ -11,7 +11,8 @@ connpass:
     - tokyo
   # オンラインイベントを含める
   include_online: true
-  # 検索期間（どちらか一方を指定、weeks_ahead が優先）
+  # 検索期間（1つだけ指定、優先順: hours_ahead > weeks_ahead > months_ahead）
+  # hours_ahead: 3   # 何時間先まで（CI検証用、最大168）
   # weeks_ahead: 2   # 何週間先まで
   months_ahead: 1    # 何ヶ月先まで
 

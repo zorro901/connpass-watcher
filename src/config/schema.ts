@@ -5,9 +5,10 @@ export const configSchema = z.object({
     api_key: z.string().min(1, "connpass API key is required"),
     prefectures: z.array(z.string()).default(["tokyo"]),
     include_online: z.boolean().default(true),
-    // 検索期間: weeks_ahead が指定されていればそちらを優先
+    // 検索期間: hours_ahead > weeks_ahead > months_ahead の優先順
     months_ahead: z.number().min(1).max(12).optional(),
     weeks_ahead: z.number().min(1).max(52).optional(),
+    hours_ahead: z.number().min(1).max(168).optional(), // 最大1週間（168時間）
   }),
 
   interests: z
