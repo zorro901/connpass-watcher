@@ -94,14 +94,18 @@ jobs:
           EOF
 
       - name: Setup Google Calendar credentials
-        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+        if: ${{ env.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+        env:
+          GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
         run: |
-          echo '${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}' | base64 -d > ~/.connpass-watcher/credentials.json
+          echo "${GOOGLE_CALENDAR_CREDENTIALS}" | base64 -d > ~/.connpass-watcher/credentials.json
 
       - name: Setup Google Calendar tokens
-        if: ${{ secrets.GOOGLE_CALENDAR_TOKENS != '' }}
+        if: ${{ env.GOOGLE_CALENDAR_TOKENS != '' }}
+        env:
+          GOOGLE_CALENDAR_TOKENS: ${{ secrets.GOOGLE_CALENDAR_TOKENS }}
         run: |
-          echo '${{ secrets.GOOGLE_CALENDAR_TOKENS }}' | base64 -d > ~/.connpass-watcher/tokens.json
+          echo "${GOOGLE_CALENDAR_TOKENS}" | base64 -d > ~/.connpass-watcher/tokens.json
 
       - name: Restore database cache
         uses: actions/cache@v4
@@ -132,7 +136,7 @@ jobs:
           retention-days: 30
 
       - name: Save updated tokens
-        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' && always() }}
+        if: ${{ always() }}
         run: |
           if [ -f ~/.connpass-watcher/tokens.json ]; then
             echo "Updated tokens (base64):"
