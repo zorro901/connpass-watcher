@@ -132,6 +132,13 @@ ${profile}
         throw new Error("No JSON found in response");
       }
 
+      // 不正なJSONを修正（末尾カンマ、改行内のエスケープ漏れなど）
+      const cleanedJson = jsonText
+        // 文字列内の改行をエスケープ
+        .replace(/:\s*"([^"]*)\n([^"]*)"/g, ': "$1\\n$2"')
+        // 末尾カンマを削除
+        .replace(/,(\s*[}\]])/g, "$1");
+
       let result: {
         interest: {
           is_match: boolean;
@@ -147,12 +154,13 @@ ${profile}
       };
 
       try {
-        result = JSON.parse(jsonText);
+        result = JSON.parse(cleanedJson);
       } catch (parseError) {
-        // JSONパースに失敗した場合、生のレスポンスをログに出力
-        logger.warn(
+        // JSONパースに失敗した場合、生のJSONをログに出力
+        logger.error(
           {
-            jsonText: jsonText.slice(0, 500),
+            jsonText: jsonText.slice(0, 1000),
+            cleanedJson: cleanedJson.slice(0, 1000),
             parseError: parseError instanceof Error ? parseError.message : parseError,
           },
           "Failed to parse JSON from LLM response",
