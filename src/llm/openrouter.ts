@@ -23,18 +23,32 @@ export class OpenRouterProvider implements LLMProvider {
     }
 
     this.model = config.model;
+    const baseURL = config.baseUrl || "https://openrouter.ai/api/v1";
+
+    logger.debug(
+      {
+        model: this.model,
+        baseURL,
+        apiKeyPrefix: apiKey.slice(0, 10) + "...",
+        apiKeySource: config.apiKey ? "config" : "env",
+      },
+      "OpenRouter provider initializing",
+    );
+
     this.client = new OpenAI({
       apiKey,
-      baseURL: config.baseUrl || "https://openrouter.ai/api/v1",
+      baseURL,
       defaultHeaders: {
         "HTTP-Referer": "https://github.com/connpass-watcher",
         "X-Title": "connpass-watcher",
       },
     });
-    logger.debug({ model: this.model, hasApiKey: !!apiKey }, "OpenRouter provider initialized");
+    logger.debug("OpenRouter provider initialized");
   }
 
   async generateText(prompt: string): Promise<string> {
+    logger.debug({ model: this.model, promptLength: prompt.length }, "Sending request to OpenRouter");
+
     const response = await this.client.chat.completions.create({
       model: this.model,
       max_tokens: 256,
@@ -45,6 +59,8 @@ export class OpenRouterProvider implements LLMProvider {
         },
       ],
     });
+
+    logger.debug({ model: this.model, choicesCount: response.choices.length }, "Received response from OpenRouter");
 
     const content = response.choices[0]?.message?.content;
     if (!content) {
