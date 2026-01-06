@@ -58,6 +58,10 @@ jobs:
             SEARCH_RANGE="months_ahead: ${MONTHS_AHEAD:-1}"
           fi
 
+          # JSON配列を単一行にフォーマット（改行を除去）
+          KEYWORDS_JSON=$(echo "${INTEREST_KEYWORDS:-[\"TypeScript\", \"Go\", \"AI\", \"LLM\", \"React\", \"Next.js\", \"Unreal Engine\", \"Unity\", \"CSS\", \"デザイン\", \"メタバース\", \"Rails\", \"Ruby\"]}" | tr -d '\n\r')
+          EXCLUDE_JSON=$(echo "${EXCLUDE_KEYWORDS:-[\"輪読会\", \"読書会\", \"もくもく会\"]}" | tr -d '\n\r')
+
           cat > ~/.connpass-watcher/config.yaml << EOF
           connpass:
             api_key: "${CONNPASS_API_KEY}"
@@ -67,10 +71,9 @@ jobs:
             ${SEARCH_RANGE}
 
           interests:
-            keywords: ${INTEREST_KEYWORDS:-'["TypeScript", "Go", "AI", "LLM", "React", "Next.js", "Unreal Engine", "Unity", "CSS", "デザイン", "メタバース", "Rails", "Ruby", "ConfyUI", "サルドラ"]'}
-            exclude_keywords: ${EXCLUDE_KEYWORDS:-'["輪読会", "読書会", "もくもく会"]'}
-            profile: |
-              ${INTEREST_PROFILE:-'TypeScript, Go, AI/ML, Ruby, Rails, Unity, Unreal Engineなどに興味のあるエンジニア。LT登壇の機会を探している。'}
+            keywords: ${KEYWORDS_JSON}
+            exclude_keywords: ${EXCLUDE_JSON}
+            profile: "${INTEREST_PROFILE:-TypeScript, Go, AI/ML, Ruby, Rails, Unity, Unreal Engineなどに興味のあるエンジニア。LT登壇の機会を探している。}"
             min_participants: ${MIN_PARTICIPANTS:-50}
 
           speaker:
