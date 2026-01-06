@@ -35,32 +35,50 @@ jobs:
         run: mkdir -p ~/.connpass-watcher
 
       - name: Setup config file
+        env:
+          CONNPASS_API_KEY: ${{ secrets.CONNPASS_API_KEY }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          INTEREST_KEYWORDS: ${{ vars.INTEREST_KEYWORDS }}
+          EXCLUDE_KEYWORDS: ${{ vars.EXCLUDE_KEYWORDS }}
+          INTEREST_PROFILE: ${{ vars.INTEREST_PROFILE }}
+          MIN_PARTICIPANTS: ${{ vars.MIN_PARTICIPANTS }}
+          LLM_ENABLED: ${{ vars.LLM_ENABLED }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          GOOGLE_CALENDAR_ID: ${{ vars.GOOGLE_CALENDAR_ID }}
+          COLOR_POPULAR: ${{ vars.COLOR_POPULAR }}
+          COLOR_SPEAKER: ${{ vars.COLOR_SPEAKER }}
         run: |
-          cat > ~/.connpass-watcher/config.yaml << 'EOF'
+          cat > ~/.connpass-watcher/config.yaml << EOF
           connpass:
-            api_key: "${{ secrets.CONNPASS_API_KEY }}"
+            api_key: "${CONNPASS_API_KEY}"
             prefectures:
               - tokyo
             include_online: true
-            months_ahead: 2
+            months_ahead: 1
 
           interests:
-            keywords: ${{ vars.INTEREST_KEYWORDS || '["TypeScript", "Rust", "Go", "AI", "LLM"]' }}
+            keywords: ${INTEREST_KEYWORDS:-'["TypeScript", "Go", "AI", "LLM", "React", "Next.js", "Unreal Engine", "Unity", "CSS", "デザイン", "メタバース", "Rails", "Ruby", "ConfyUI", "サルドラ"]'}
+            exclude_keywords: ${EXCLUDE_KEYWORDS:-'["輪読会", "読書会", "もくもく会"]'}
             profile: |
-              ${{ vars.INTEREST_PROFILE || 'Software engineer interested in web development and AI.' }}
+              ${INTEREST_PROFILE:-'TypeScript, Go, AI/ML, Ruby, Rails, Unity, Unreal Engineなどに興味のあるエンジニア。LT登壇の機会を探している。'}
+            min_participants: ${MIN_PARTICIPANTS:-50}
 
           speaker:
             check_participant_types: true
             check_cfp: true
 
           llm:
-            enabled: ${{ vars.LLM_ENABLED || 'true' }}
-            provider: ${{ vars.LLM_PROVIDER || 'anthropic' }}
-            model: ${{ vars.LLM_MODEL || '' }}
+            enabled: ${LLM_ENABLED:-true}
+            provider: ${LLM_PROVIDER:-google}
+            model: ${LLM_MODEL:-gemini-2.0-flash}
+            api_key: "${LLM_API_KEY}"
 
           google_calendar:
-            enabled: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
-            calendar_id: ${{ vars.GOOGLE_CALENDAR_ID || 'primary' }}
+            enabled: true
+            calendar_id: ${GOOGLE_CALENDAR_ID:-primary}
+            color_popular: "${COLOR_POPULAR:-6}"
+            color_speaker: "${COLOR_SPEAKER:-9}"
 
           schedule:
             cron: "0 9 * * *"
@@ -85,10 +103,6 @@ jobs:
             connpass-db-
 
       - name: Run scan
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             node dist/index.js scan --dry-run --json > scan-results.json
