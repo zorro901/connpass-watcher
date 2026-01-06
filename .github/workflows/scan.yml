@@ -124,15 +124,21 @@ jobs:
       - name: Run scan
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            node dist/index.js scan --dry-run --json > scan-results.json
+            node dist/index.js scan --dry-run --json > scan-results.json 2> scan.log
           else
-            node dist/index.js scan --json > scan-results.json
+            node dist/index.js scan --json > scan-results.json 2> scan.log
           fi
+
+      - name: Display logs
+        if: always()
+        run: |
+          echo "=== Scan Logs ==="
+          cat scan.log || echo "No logs available"
 
       - name: Display results
         run: |
           echo "=== Scan Results ==="
-          cat scan-results.json | jq '.'
+          jq '.' scan-results.json
 
       - name: Upload results as artifact
         uses: actions/upload-artifact@v4
