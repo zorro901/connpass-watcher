@@ -109,6 +109,8 @@ node dist/index.js daemon
 
 | Variable | 説明 | デフォルト |
 |----------|------|-----------|
+| `MONTHS_AHEAD` | 検索期間（月単位、1-12） | `1` |
+| `WEEKS_AHEAD` | 検索期間（週単位、1-52）※設定時はMONTHS_AHEADより優先 | - |
 | `INTEREST_KEYWORDS` | 興味キーワード (JSON配列) | `["TypeScript", "Go", "AI", ...]` |
 | `EXCLUDE_KEYWORDS` | 除外キーワード (JSON配列) | `["輪読会", "読書会", "もくもく会"]` |
 | `INTEREST_PROFILE` | 興味プロファイル | `TypeScript, Go, AI/ML...` |

@@ -48,14 +48,23 @@ jobs:
           GOOGLE_CALENDAR_ID: ${{ vars.GOOGLE_CALENDAR_ID }}
           COLOR_POPULAR: ${{ vars.COLOR_POPULAR }}
           COLOR_SPEAKER: ${{ vars.COLOR_SPEAKER }}
+          MONTHS_AHEAD: ${{ vars.MONTHS_AHEAD }}
+          WEEKS_AHEAD: ${{ vars.WEEKS_AHEAD }}
         run: |
+          # weeks_ahead が設定されていれば優先、なければ months_ahead を使用
+          if [ -n "${WEEKS_AHEAD}" ]; then
+            SEARCH_RANGE="weeks_ahead: ${WEEKS_AHEAD}"
+          else
+            SEARCH_RANGE="months_ahead: ${MONTHS_AHEAD:-1}"
+          fi
+
           cat > ~/.connpass-watcher/config.yaml << EOF
           connpass:
             api_key: "${CONNPASS_API_KEY}"
             prefectures:
               - tokyo
             include_online: true
-            months_ahead: 1
+            ${SEARCH_RANGE}
 
           interests:
             keywords: ${INTEREST_KEYWORDS:-'["TypeScript", "Go", "AI", "LLM", "React", "Next.js", "Unreal Engine", "Unity", "CSS", "デザイン", "メタバース", "Rails", "Ruby", "ConfyUI", "サルドラ"]'}
