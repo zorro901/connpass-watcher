@@ -3,6 +3,7 @@ import { AnthropicProvider } from "./anthropic.js";
 import { GoogleProvider } from "./google.js";
 import { OllamaProvider } from "./ollama.js";
 import { OpenAIProvider } from "./openai.js";
+import { OpenRouterProvider } from "./openrouter.js";
 import type { LLMProvider, LLMProviderConfig } from "./types.js";
 
 const logger = createChildLogger("llm:factory");
@@ -22,6 +23,8 @@ export function createLLMProvider(config: LLMProviderConfig): LLMProvider {
       return new GoogleProvider(config);
     case "ollama":
       return new OllamaProvider(config);
+    case "openrouter":
+      return new OpenRouterProvider(config);
     default:
       throw new Error(`Unknown LLM provider: ${config.provider}`);
   }
@@ -40,6 +43,9 @@ export function getDefaultModel(provider: LLMProviderConfig["provider"]): string
       return "gemini-1.5-flash";
     case "ollama":
       return "llama3.2";
+    case "openrouter":
+      // 無料モデル: xiaomi/mimo-v2-flash:free
+      return "xiaomi/mimo-v2-flash:free";
     default:
       return "gpt-4o";
   }

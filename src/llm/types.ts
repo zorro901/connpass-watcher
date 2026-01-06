@@ -17,7 +17,7 @@ export interface LLMProvider {
  * LLMプロバイダの設定
  */
 export interface LLMProviderConfig {
-  provider: "anthropic" | "openai" | "google" | "ollama";
+  provider: "anthropic" | "openai" | "google" | "ollama" | "openrouter";
   model: string;
   apiKey?: string | undefined;
   baseUrl?: string | undefined;

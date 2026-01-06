@@ -24,7 +24,7 @@ export const configSchema = z.object({
   llm: z
     .object({
       enabled: z.boolean().default(true),
-      provider: z.enum(["anthropic", "openai", "google", "ollama"]).default("anthropic"),
+      provider: z.enum(["anthropic", "openai", "google", "ollama", "openrouter"]).default("anthropic"),
       model: z.string().optional(),
       api_key: z.string().optional(),
       base_url: z.string().optional(),
