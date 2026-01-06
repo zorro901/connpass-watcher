@@ -124,23 +124,24 @@ jobs:
       - name: Run scan
         shell: bash
         run: |
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            node dist/index.js scan --dry-run --json > scan-results.json
-          else
-            node dist/index.js scan --json > scan-results.json
-          fi
+#          if [ "${{ inputs.dry_run }}" = "true" ]; then
+#            node dist/index.js scan --dry-run --json > scan-results.json
+#          else
+#            node dist/index.js scan --json > scan-results.json
+#          fi
+           node dist/index.js scan --json > scan-results.json
 
-      - name: Display results
-        run: |
-          echo "=== Scan Results ==="
-          jq '.' scan-results.json
-
-      - name: Upload results as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: scan-results-${{ github.run_id }}
-          path: scan-results.json
-          retention-days: 30
+#      - name: Display results
+#        run: |
+#          echo "=== Scan Results ==="
+#          jq '.' scan-results.json
+#
+#      - name: Upload results as artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: scan-results-${{ github.run_id }}
+#          path: scan-results.json
+#          retention-days: 30
 
       - name: Save updated tokens
         if: ${{ always() }}
