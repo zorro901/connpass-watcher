@@ -51,7 +51,7 @@ export class OpenRouterProvider implements LLMProvider {
 
     const response = await this.client.chat.completions.create({
       model: this.model,
-      max_tokens: 256,
+      max_tokens: 1024,
       messages: [
         {
           role: "user",

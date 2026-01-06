@@ -26,7 +26,7 @@ export class AnthropicProvider implements LLMProvider {
     const response = await claudeRateLimiter.schedule(async () => {
       return this.client.messages.create({
         model: this.model,
-        max_tokens: 256,
+        max_tokens: 1024,
         messages: [
           {
             role: "user",
