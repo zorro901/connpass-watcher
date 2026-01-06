@@ -111,13 +111,28 @@ ${profile}
     try {
       const responseText = await this.provider.generateText(prompt);
 
-      // JSONを抽出
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
+      // JSONを抽出（マークダウンコードブロック対応）
+      let jsonText: string | null = null;
+
+      // まずマークダウンのコードブロックを探す
+      const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch?.[1]) {
+        jsonText = codeBlockMatch[1].trim();
+      } else {
+        // コードブロックがなければ最初の { から最後の } までを抽出
+        const startIdx = responseText.indexOf("{");
+        const endIdx = responseText.lastIndexOf("}");
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          jsonText = responseText.slice(startIdx, endIdx + 1);
+        }
+      }
+
+      if (!jsonText) {
+        logger.warn({ responseText: responseText.slice(0, 500) }, "No JSON found in LLM response");
         throw new Error("No JSON found in response");
       }
 
-      const result = JSON.parse(jsonMatch[0]) as {
+      let result: {
         interest: {
           is_match: boolean;
           score: number;
@@ -130,6 +145,20 @@ ${profile}
           reason?: string;
         };
       };
+
+      try {
+        result = JSON.parse(jsonText);
+      } catch (parseError) {
+        // JSONパースに失敗した場合、生のレスポンスをログに出力
+        logger.warn(
+          {
+            jsonText: jsonText.slice(0, 500),
+            parseError: parseError instanceof Error ? parseError.message : parseError,
+          },
+          "Failed to parse JSON from LLM response",
+        );
+        throw parseError;
+      }
 
       logger.debug(
         {
