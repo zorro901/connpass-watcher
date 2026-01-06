@@ -1,11 +1,11 @@
 name: Scan Connpass Events
 
 on:
-  # 毎日9時(JST)に実行 = UTC 0時
-  schedule:
-    - cron: '0 0 * * *'
+  # 定期実行は一時停止中（コスト確認のため）
+  # schedule:
+  #   - cron: '0 0 * * *'
 
-  # 手動実行も可能
+  # 手動実行のみ
   workflow_dispatch:
     inputs:
       dry_run:
