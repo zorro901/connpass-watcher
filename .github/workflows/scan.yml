@@ -121,9 +121,9 @@ jobs:
       - name: Run scan
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            node dist/index.js scan --dry-run --json 2>&1 | tee scan-results.json
+            node dist/index.js scan --dry-run --json > scan-results.json
           else
-            node dist/index.js scan --json 2>&1 | tee scan-results.json
+            node dist/index.js scan --json > scan-results.json
           fi
 
       - name: Display results
