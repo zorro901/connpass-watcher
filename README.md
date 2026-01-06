@@ -7,7 +7,9 @@ connpassの東京・オンライン開催イベントを監視し、登壇機会
 - **イベント取得**: connpass API v2で東京・オンラインイベントを取得
 - **登壇機会検出**: LT枠やCFP（発表者募集）を自動検出
 - **興味マッチング**: キーワード + LLMのハイブリッド判定
-- **カレンダー連携**: マッチしたイベントをGoogle Calendarに自動登録
+- **人気イベント検出**: 参加者数が閾値以上のイベントを自動マッチ
+- **カレンダー連携**: マッチしたイベントをGoogle Calendarに自動登録（色分け対応）
+- **イベント更新追跡**: connpassでイベント情報が更新されたら自動で再処理・カレンダー更新
 - **マルチLLM対応**: Anthropic, OpenAI, Google, Ollamaに対応
 
 ## インストール
@@ -27,24 +29,33 @@ connpass:
   prefectures:
     - tokyo
   include_online: true
-  months_ahead: 2
+  months_ahead: 2      # 何ヶ月先まで取得（1-12）
+  # weeks_ahead: 4     # または週単位で指定（months_aheadより優先）
 
 interests:
   keywords:
     - TypeScript
     - Rust
     - AI
+  exclude_keywords:    # これらを含むイベントは除外
+    - 輪読会
+    - 読書会
+    - もくもく会
   profile: |
     TypeScript, Rust, AIに興味のあるエンジニア
+  min_participants: 50  # この人数以上は人気イベントとして自動マッチ
 
 llm:
   enabled: true
   provider: anthropic  # anthropic, openai, google, ollama
   # model: claude-sonnet-4-20250514
+  # api_key: "..."     # 省略時は環境変数から取得
 
 google_calendar:
   enabled: true
   calendar_id: primary
+  color_popular: "6"   # 人気イベントの色（みかん色）
+  color_speaker: "9"   # 登壇機会ありの色（ブルーベリー色）
 ```
 
 ## 使用方法
@@ -85,14 +96,12 @@ node dist/index.js daemon
 | Secret | 説明 |
 |--------|------|
 | `CONNPASS_API_KEY` | connpass APIキー |
-| `ANTHROPIC_API_KEY` | Anthropic APIキー（LLMにAnthropicを使用する場合） |
+| `LLM_API_KEY` | LLM APIキー（使用するプロバイダに応じて設定） |
 
 #### Secrets（オプション）
 
 | Secret | 説明 |
 |--------|------|
-| `OPENAI_API_KEY` | OpenAI APIキー |
-| `GOOGLE_API_KEY` | Google AI APIキー（Gemini用） |
 | `GOOGLE_CALENDAR_CREDENTIALS` | Google OAuth credentials.json (Base64エンコード) |
 | `GOOGLE_CALENDAR_TOKENS` | Google OAuth tokens.json (Base64エンコード) |
 
@@ -100,12 +109,16 @@ node dist/index.js daemon
 
 | Variable | 説明 | デフォルト |
 |----------|------|-----------|
-| `INTEREST_KEYWORDS` | 興味キーワード (JSON配列) | `["TypeScript", "Rust", "Go", "AI", "LLM"]` |
-| `INTEREST_PROFILE` | 興味プロファイル | `Software engineer...` |
+| `INTEREST_KEYWORDS` | 興味キーワード (JSON配列) | `["TypeScript", "Go", "AI", ...]` |
+| `EXCLUDE_KEYWORDS` | 除外キーワード (JSON配列) | `["輪読会", "読書会", "もくもく会"]` |
+| `INTEREST_PROFILE` | 興味プロファイル | `TypeScript, Go, AI/ML...` |
+| `MIN_PARTICIPANTS` | 人気イベント閾値 | `50` |
 | `LLM_ENABLED` | LLM有効化 | `true` |
-| `LLM_PROVIDER` | LLMプロバイダ | `anthropic` |
-| `LLM_MODEL` | LLMモデル | (プロバイダのデフォルト) |
+| `LLM_PROVIDER` | LLMプロバイダ | `google` |
+| `LLM_MODEL` | LLMモデル | `gemini-2.0-flash` |
 | `GOOGLE_CALENDAR_ID` | カレンダーID | `primary` |
+| `COLOR_POPULAR` | 人気イベントの色ID | `6` (みかん) |
+| `COLOR_SPEAKER` | 登壇機会の色ID | `9` (ブルーベリー) |
 
 ### Google Calendar認証トークンの取得
 
@@ -138,9 +151,9 @@ Actions タブから "Scan Connpass Events" → "Run workflow" で手動実行�
 
 | プロバイダ | モデル例 | 環境変数 |
 |-----------|---------|---------|
+| google | gemini-2.0-flash (デフォルト) | `GOOGLE_API_KEY` |
 | anthropic | claude-sonnet-4-20250514 | `ANTHROPIC_API_KEY` |
 | openai | gpt-4o, gpt-4o-mini | `OPENAI_API_KEY` |
-| google | gemini-2.5-flash, gemini-3-flash | `GOOGLE_API_KEY` |
 | ollama | llama3.2, mistral | (ローカル実行) |
 
 ### OpenAI互換API
@@ -153,6 +166,24 @@ llm:
   model: llama-3.3-70b-versatile
   base_url: "https://api.groq.com/openai/v1"
 ```
+
+## カレンダーの色
+
+Google Calendarの色ID一覧:
+
+| ID | 色名 | 用途例 |
+|----|------|--------|
+| 1 | ラベンダー | |
+| 2 | セージ | |
+| 3 | ブドウ | |
+| 4 | フラミンゴ | |
+| 5 | バナナ | |
+| 6 | みかん | 人気イベント (デフォルト) |
+| 7 | ピーコック | |
+| 8 | グラファイト | |
+| 9 | ブルーベリー | 登壇機会あり (デフォルト) |
+| 10 | バジル | |
+| 11 | トマト | |
 
 ## 開発
 
