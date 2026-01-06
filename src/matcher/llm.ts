@@ -157,13 +157,9 @@ ${profile}
         result = JSON.parse(cleanedJson);
       } catch (parseError) {
         // JSONパースに失敗した場合、生のJSONをログに出力
+        const errMsg = parseError instanceof Error ? parseError.message : String(parseError);
         logger.error(
-          {
-            jsonText: jsonText.slice(0, 1000),
-            cleanedJson: cleanedJson.slice(0, 1000),
-            parseError: parseError instanceof Error ? parseError.message : parseError,
-          },
-          "Failed to parse JSON from LLM response",
+          `Failed to parse JSON: ${errMsg}\n--- Raw JSON ---\n${jsonText}\n--- Cleaned JSON ---\n${cleanedJson}`,
         );
         throw parseError;
       }
