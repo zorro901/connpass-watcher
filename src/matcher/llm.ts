@@ -156,8 +156,19 @@ ${profile}
         },
       };
     } catch (error) {
+      // エラー詳細を抽出
+      const errorDetails =
+        error instanceof Error
+          ? {
+              message: error.message,
+              name: error.name,
+              // OpenAI SDK エラーの追加プロパティ
+              ...(("status" in error && { status: error.status }) || {}),
+              ...(("code" in error && { code: error.code }) || {}),
+            }
+          : error;
       logger.error(
-        { error, eventId: event.id, provider: this.provider.name },
+        { error: errorDetails, eventId: event.id, provider: this.provider.name },
         "LLM analysis failed",
       );
       return defaultResult;
