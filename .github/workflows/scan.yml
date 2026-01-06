@@ -122,11 +122,12 @@ jobs:
             connpass-db-
 
       - name: Run scan
+        shell: bash
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            node dist/index.js scan --dry-run --json > scan-results.json 2> >(tee scan.log >&2)
+            node dist/index.js scan --dry-run --json > scan-results.json
           else
-            node dist/index.js scan --json > scan-results.json 2> >(tee scan.log >&2)
+            node dist/index.js scan --json > scan-results.json
           fi
 
       - name: Display results
