@@ -123,13 +123,14 @@ jobs:
 
       - name: Run scan
         shell: bash
-        run: |
+        run: node dist/index.js scan --json > scan-results.json
+#        run: |
 #          if [ "${{ inputs.dry_run }}" = "true" ]; then
 #            node dist/index.js scan --dry-run --json > scan-results.json
 #          else
 #            node dist/index.js scan --json > scan-results.json
 #          fi
-           node dist/index.js scan --json > scan-results.json
+
 
 #      - name: Display results
 #        run: |
