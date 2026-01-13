@@ -454,10 +454,10 @@ program
 
         console.log(`Found ${toKeep.length} events with duplicates:\n`);
 
-        // グループごとに表示
+        // グループごとに表示（タイトルでグループ化）
         const grouped = new Map<string, typeof duplicateEvents>();
         for (const event of duplicateEvents) {
-          const key = `${event.summary}|${event.start}`;
+          const key = event.summary;
           const existing = grouped.get(key) ?? [];
           existing.push(event);
           grouped.set(key, existing);

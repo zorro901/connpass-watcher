@@ -659,11 +659,11 @@ export class GoogleCalendarClient {
   async findDuplicateConnpassEvents(): Promise<Array<{ id: string; summary: string; start: string; isDuplicate: boolean }>> {
     const allEvents = await this.findConnpassEvents();
 
-    // タイトルでグループ化
+    // タイトルのみでグループ化（開始時刻の微妙な差異を無視）
     const eventsByTitle = new Map<string, Array<{ id: string; summary: string; start: string }>>();
 
     for (const event of allEvents) {
-      const key = `${event.summary}|${event.start}`;
+      const key = event.summary;
       const existing = eventsByTitle.get(key) ?? [];
       existing.push(event);
       eventsByTitle.set(key, existing);
