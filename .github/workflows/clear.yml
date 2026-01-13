@@ -51,20 +51,26 @@ jobs:
           EOF
 
       - name: Setup Google Calendar credentials
-        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
         env:
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
         run: |
-          echo "${GOOGLE_CALENDAR_CREDENTIALS}" | base64 -d > ~/.connpass-watcher/credentials.json
-          echo "credentials.json created: $(ls -la ~/.connpass-watcher/credentials.json)"
+          if [ -n "${GOOGLE_CALENDAR_CREDENTIALS}" ]; then
+            echo "${GOOGLE_CALENDAR_CREDENTIALS}" | base64 -d > ~/.connpass-watcher/credentials.json
+            echo "credentials.json created: $(ls -la ~/.connpass-watcher/credentials.json)"
+          else
+            echo "GOOGLE_CALENDAR_CREDENTIALS secret is not set"
+          fi
 
       - name: Setup Google Calendar tokens
-        if: ${{ secrets.GOOGLE_CALENDAR_TOKENS != '' }}
         env:
           GOOGLE_CALENDAR_TOKENS: ${{ secrets.GOOGLE_CALENDAR_TOKENS }}
         run: |
-          echo "${GOOGLE_CALENDAR_TOKENS}" | base64 -d > ~/.connpass-watcher/tokens.json
-          echo "tokens.json created: $(ls -la ~/.connpass-watcher/tokens.json)"
+          if [ -n "${GOOGLE_CALENDAR_TOKENS}" ]; then
+            echo "${GOOGLE_CALENDAR_TOKENS}" | base64 -d > ~/.connpass-watcher/tokens.json
+            echo "tokens.json created: $(ls -la ~/.connpass-watcher/tokens.json)"
+          else
+            echo "GOOGLE_CALENDAR_TOKENS secret is not set"
+          fi
 
       - name: Verify auth files
         run: |
