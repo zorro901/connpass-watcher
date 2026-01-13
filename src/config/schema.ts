@@ -37,9 +37,10 @@ export const configSchema = z.object({
       enabled: z.boolean().default(true),
       calendar_id: z.string().default("primary"),
       // Google Calendar の色ID
-      // 6: Tangerine (みかん), 9: Blueberry (ブルーベリー)
+      // 6: Tangerine (みかん), 9: Blueberry (ブルーベリー), 10: Basil (バジル)
       color_popular: z.string().default("6"), // 人気イベント
       color_speaker: z.string().default("9"), // 登壇機会あり
+      color_online: z.string().optional(), // オンライン参加可能（指定しなければ他の色を優先）
       // 興味マッチのみはデフォルト色（colorIdなし）
     })
     .default({}),

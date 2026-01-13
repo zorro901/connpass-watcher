@@ -74,9 +74,13 @@ google_calendar:
   calendar_id: primary
   # カテゴリ別のイベント色（Google Calendar の色ID）
   # 参照: https://developers.google.com/calendar/api/v3/reference/colors
-  color_popular: "6"   # 🔥 人気イベント（50人以上）- みかん色
-  color_speaker: "9"   # 🎤 登壇機会あり - ブルーベリー色
+  # 1: Lavender, 2: Sage, 3: Grape, 4: Flamingo, 5: Banana
+  # 6: Tangerine, 7: Peacock, 8: Graphite, 9: Blueberry, 10: Basil, 11: Tomato
+  color_popular: "6"   # 🔥 人気イベント（50人以上）- Tangerine
+  color_speaker: "9"   # 🎤 登壇機会あり - Blueberry
+  color_online: "10"   # 🌐 オンライン参加可能 - Basil（コメントアウトで無効）
   # 興味マッチのみのイベントはカレンダーのデフォルト色
+  # 優先順位: 登壇機会 > 人気イベント > オンライン > デフォルト
 
 schedule:
   # 定期実行のcron式（任意）

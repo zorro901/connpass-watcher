@@ -246,14 +246,21 @@ export class GoogleCalendarClient {
 
   /**
    * イベントの種類に応じた色IDを取得
-   * 優先順位: 登壇機会 > 人気イベント > デフォルト
+   * 優先順位: 登壇機会 > 人気イベント > オンライン > デフォルト
    */
-  getColorId(options: { hasSpeakerOpportunity: boolean; isPopular: boolean }): string | undefined {
+  getColorId(options: {
+    hasSpeakerOpportunity: boolean;
+    isPopular: boolean;
+    isOnline?: boolean;
+  }): string | undefined {
     if (options.hasSpeakerOpportunity) {
       return this.config.google_calendar.color_speaker;
     }
     if (options.isPopular) {
       return this.config.google_calendar.color_popular;
+    }
+    if (options.isOnline && this.config.google_calendar.color_online) {
+      return this.config.google_calendar.color_online;
     }
     return undefined; // デフォルト色
   }

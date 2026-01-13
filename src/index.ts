@@ -147,6 +147,7 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
     const colorId = calendarClient.getColorId({
       hasSpeakerOpportunity,
       isPopular,
+      isOnline: event.is_online,
     });
 
     // カレンダーに登録または更新 (upsert: 既存イベントがあれば更新)
