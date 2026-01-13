@@ -51,18 +51,35 @@ jobs:
           EOF
 
       - name: Setup Google Calendar credentials
-        if: ${{ env.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+        if: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS != '' }}
         env:
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
         run: |
           echo "${GOOGLE_CALENDAR_CREDENTIALS}" | base64 -d > ~/.connpass-watcher/credentials.json
+          echo "credentials.json created: $(ls -la ~/.connpass-watcher/credentials.json)"
 
       - name: Setup Google Calendar tokens
-        if: ${{ env.GOOGLE_CALENDAR_TOKENS != '' }}
+        if: ${{ secrets.GOOGLE_CALENDAR_TOKENS != '' }}
         env:
           GOOGLE_CALENDAR_TOKENS: ${{ secrets.GOOGLE_CALENDAR_TOKENS }}
         run: |
           echo "${GOOGLE_CALENDAR_TOKENS}" | base64 -d > ~/.connpass-watcher/tokens.json
+          echo "tokens.json created: $(ls -la ~/.connpass-watcher/tokens.json)"
+
+      - name: Verify auth files
+        run: |
+          echo "Checking auth files..."
+          ls -la ~/.connpass-watcher/ || true
+          if [ -f ~/.connpass-watcher/credentials.json ]; then
+            echo "credentials.json exists"
+          else
+            echo "WARNING: credentials.json not found"
+          fi
+          if [ -f ~/.connpass-watcher/tokens.json ]; then
+            echo "tokens.json exists"
+          else
+            echo "WARNING: tokens.json not found"
+          fi
 
       - name: Restore database cache
         uses: actions/cache@v4

@@ -144,14 +144,37 @@ export class GoogleCalendarClient {
       const tokens = this.loadTokens();
 
       if (!tokens?.refresh_token) {
+        logger.warn("No refresh token found in tokens.json");
         return false;
       }
 
+      logger.debug({ hasAccessToken: !!tokens.access_token, hasRefreshToken: !!tokens.refresh_token }, "Checking authentication");
+
       // トークンをリフレッシュしてみる
       client.setCredentials(tokens);
-      await client.getAccessToken();
+      const { token } = await client.getAccessToken();
+
+      if (!token) {
+        logger.warn("Failed to get access token (token is null)");
+        return false;
+      }
+
+      // リフレッシュ後のトークンを保存（Googleが新しいリフレッシュトークンを発行することがある）
+      const newCredentials = client.credentials;
+      if (newCredentials.access_token) {
+        this.saveTokens(newCredentials as unknown as Tokens);
+        logger.debug("Tokens refreshed and saved");
+      }
+
+      logger.debug("Authentication verified successfully");
       return true;
-    } catch {
+    } catch (error) {
+      const err = error as { message?: string; code?: string; response?: { data?: unknown } };
+      logger.error({
+        message: err.message,
+        code: err.code,
+        responseData: err.response?.data,
+      }, "Authentication check failed");
       return false;
     }
   }
