@@ -483,6 +483,86 @@ export class GoogleCalendarClient {
   }
 
   /**
+   * カレンダーのイベントを削除
+   */
+  async deleteEvent(calendarEventId: string): Promise<boolean> {
+    if (!this.config.google_calendar.enabled) {
+      logger.debug("Calendar integration disabled");
+      return false;
+    }
+
+    const client = await this.initOAuth2Client();
+    const calendar = google.calendar({ version: "v3", auth: client });
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
+    try {
+      await googleCalendarRateLimiter.schedule(() =>
+        calendar.events.delete({
+          calendarId: targetCalendarId,
+          eventId: calendarEventId,
+        }),
+      );
+
+      logger.info({ calendarEventId, calendarId: targetCalendarId }, "Event deleted from Google Calendar");
+      return true;
+    } catch (error) {
+      logger.error({ error, calendarEventId }, "Failed to delete event from calendar");
+      return false;
+    }
+  }
+
+  /**
+   * 指定期間のイベントを一覧取得
+   */
+  async listEvents(options: {
+    timeMin?: string;
+    timeMax?: string;
+    query?: string;
+    maxResults?: number;
+  }): Promise<Array<{ id: string; summary: string; start: string }>> {
+    const client = await this.initOAuth2Client();
+    const calendar = google.calendar({ version: "v3", auth: client });
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
+    try {
+      const listParams: {
+        calendarId: string;
+        maxResults: number;
+        singleEvents: boolean;
+        orderBy: "startTime";
+        timeMin?: string;
+        timeMax?: string;
+        q?: string;
+      } = {
+        calendarId: targetCalendarId,
+        maxResults: options.maxResults ?? 100,
+        singleEvents: true,
+        orderBy: "startTime",
+      };
+
+      if (options.timeMin) listParams.timeMin = options.timeMin;
+      if (options.timeMax) listParams.timeMax = options.timeMax;
+      if (options.query) listParams.q = options.query;
+
+      const result = await googleCalendarRateLimiter.schedule(() =>
+        calendar.events.list(listParams),
+      );
+
+      const events = result.data.items ?? [];
+      return events
+        .filter((e) => e.id && e.summary)
+        .map((e) => ({
+          id: e.id as string,
+          summary: e.summary as string,
+          start: e.start?.dateTime ?? e.start?.date ?? "",
+        }));
+    } catch (error) {
+      logger.error({ error }, "Failed to list calendar events");
+      return [];
+    }
+  }
+
+  /**
    * イベントを登録または更新 (upsert)
    * 既存のイベントがあれば更新、なければ新規作成
    */

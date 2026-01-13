@@ -1,0 +1,99 @@
+name: Clear Calendar Events
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (show events without deleting)'
+        required: false
+        default: true
+        type: boolean
+      clear_all:
+        description: 'Clear all processing history as well'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  clear:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        run: bun run build
+
+      - name: Create config directory
+        run: mkdir -p ~/.connpass-watcher
+
+      - name: Setup config file
+        env:
+          CONNPASS_API_KEY: ${{ secrets.CONNPASS_API_KEY }}
+          GOOGLE_CALENDAR_ID: ${{ vars.GOOGLE_CALENDAR_ID }}
+        run: |
+          cat > ~/.connpass-watcher/config.yaml << EOF
+          connpass:
+            api_key: "${CONNPASS_API_KEY}"
+            prefectures:
+              - tokyo
+
+          google_calendar:
+            enabled: true
+            calendar_id: ${GOOGLE_CALENDAR_ID:-primary}
+          EOF
+
+      - name: Setup Google Calendar credentials
+        if: ${{ env.GOOGLE_CALENDAR_CREDENTIALS != '' }}
+        env:
+          GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
+        run: |
+          echo "${GOOGLE_CALENDAR_CREDENTIALS}" | base64 -d > ~/.connpass-watcher/credentials.json
+
+      - name: Setup Google Calendar tokens
+        if: ${{ env.GOOGLE_CALENDAR_TOKENS != '' }}
+        env:
+          GOOGLE_CALENDAR_TOKENS: ${{ secrets.GOOGLE_CALENDAR_TOKENS }}
+        run: |
+          echo "${GOOGLE_CALENDAR_TOKENS}" | base64 -d > ~/.connpass-watcher/tokens.json
+
+      - name: Restore database cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.connpass-watcher/events.db
+          key: connpass-db-${{ github.run_id }}
+          restore-keys: |
+            connpass-db-
+
+      - name: Run clear
+        run: |
+          ARGS=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          if [ "${{ inputs.clear_all }}" = "true" ]; then
+            ARGS="$ARGS --all"
+          fi
+          node dist/index.js clear $ARGS
+
+      - name: Save database cache
+        if: ${{ inputs.dry_run != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.connpass-watcher/events.db
+          key: connpass-db-${{ github.run_id }}
+
+      - name: Save updated tokens
+        if: ${{ always() }}
+        run: |
+          if [ -f ~/.connpass-watcher/tokens.json ]; then
+            echo "Updated tokens (base64):"
+            base64 < ~/.connpass-watcher/tokens.json
+          fi

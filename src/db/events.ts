@@ -160,4 +160,54 @@ export class EventRepository {
     const result = this.stmtGetProcessed.get(eventId) as ProcessedEventRecord | undefined;
     return result ?? null;
   }
+
+  /**
+   * カレンダーに登録済みの全イベントを取得
+   */
+  getEventsWithCalendarId(): Array<{ eventId: number; calendarEventId: string; title: string }> {
+    const stmt = this.db.prepare(`
+      SELECT p.event_id, p.calendar_event_id, e.title
+      FROM processed_events p
+      JOIN events e ON p.event_id = e.event_id
+      WHERE p.calendar_event_id IS NOT NULL
+    `);
+    const rows = stmt.all() as Array<{ event_id: number; calendar_event_id: string; title: string }>;
+    return rows.map((r) => ({
+      eventId: r.event_id,
+      calendarEventId: r.calendar_event_id,
+      title: r.title,
+    }));
+  }
+
+  /**
+   * イベントのカレンダーIDをクリア
+   */
+  clearCalendarEventId(eventId: number): void {
+    const stmt = this.db.prepare(`
+      UPDATE processed_events SET calendar_event_id = NULL WHERE event_id = ?
+    `);
+    stmt.run(eventId);
+    logger.debug({ eventId }, "Calendar event ID cleared");
+  }
+
+  /**
+   * 処理済みイベントを削除
+   */
+  deleteProcessedEvent(eventId: number): void {
+    const stmt = this.db.prepare(`
+      DELETE FROM processed_events WHERE event_id = ?
+    `);
+    stmt.run(eventId);
+    logger.debug({ eventId }, "Processed event deleted");
+  }
+
+  /**
+   * 全処理済みイベントを削除
+   */
+  clearAllProcessedEvents(): number {
+    const stmt = this.db.prepare(`DELETE FROM processed_events`);
+    const result = stmt.run();
+    logger.info({ count: result.changes }, "All processed events cleared");
+    return result.changes;
+  }
 }
