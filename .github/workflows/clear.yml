@@ -3,13 +3,21 @@ name: Clear Calendar Events
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Clear mode'
+        required: true
+        default: 'duplicates'
+        type: choice
+        options:
+          - duplicates
+          - all
       dry_run:
         description: 'Dry run (show events without deleting)'
         required: false
         default: true
         type: boolean
-      clear_all:
-        description: 'Clear all processing history as well'
+      clear_history:
+        description: 'Clear processing history as well'
         required: false
         default: false
         type: boolean
@@ -97,13 +105,19 @@ jobs:
 
       - name: Run clear
         run: |
-          ARGS="--from-calendar"
+          ARGS=""
+          if [ "${{ inputs.mode }}" = "duplicates" ]; then
+            ARGS="--duplicates"
+          else
+            ARGS="--from-calendar"
+          fi
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi
-          if [ "${{ inputs.clear_all }}" = "true" ]; then
+          if [ "${{ inputs.clear_history }}" = "true" ]; then
             ARGS="$ARGS --all"
           fi
+          echo "Running: node dist/index.js clear $ARGS"
           node dist/index.js clear $ARGS
 
       - name: Save database cache

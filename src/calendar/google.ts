@@ -653,6 +653,44 @@ export class GoogleCalendarClient {
   }
 
   /**
+   * 重複イベント（同じタイトル）を検索
+   * 同じタイトルのイベントが複数ある場合、最初の1つを残して残りを返す
+   */
+  async findDuplicateConnpassEvents(): Promise<Array<{ id: string; summary: string; start: string; isDuplicate: boolean }>> {
+    const allEvents = await this.findConnpassEvents();
+
+    // タイトルでグループ化
+    const eventsByTitle = new Map<string, Array<{ id: string; summary: string; start: string }>>();
+
+    for (const event of allEvents) {
+      const key = `${event.summary}|${event.start}`;
+      const existing = eventsByTitle.get(key) ?? [];
+      existing.push(event);
+      eventsByTitle.set(key, existing);
+    }
+
+    // 重複しているイベントのみ返す（最初の1つは残す）
+    const duplicates: Array<{ id: string; summary: string; start: string; isDuplicate: boolean }> = [];
+
+    for (const [_key, events] of eventsByTitle) {
+      if (events.length > 1) {
+        // 最初の1つは残す、残りは削除対象
+        events.forEach((event, i) => {
+          duplicates.push({
+            id: event.id,
+            summary: event.summary,
+            start: event.start,
+            isDuplicate: i > 0, // 最初以外は重複
+          });
+        });
+      }
+    }
+
+    logger.info({ totalDuplicates: duplicates.filter(d => d.isDuplicate).length }, "Found duplicate events");
+    return duplicates;
+  }
+
+  /**
    * イベントを登録または更新 (upsert)
    * 既存のイベントがあれば更新、なければ新規作成
    */

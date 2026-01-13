@@ -421,7 +421,8 @@ program
   .option("--dry-run", "Show events to be deleted without actually deleting")
   .option("--all", "Delete all calendar events and clear processing history")
   .option("--from-calendar", "Search events directly from Google Calendar (ignore local DB)")
-  .action(async (options: { config?: string; dryRun?: boolean; all?: boolean; fromCalendar?: boolean }) => {
+  .option("--duplicates", "Only delete duplicate events (keep one of each)")
+  .action(async (options: { config?: string; dryRun?: boolean; all?: boolean; fromCalendar?: boolean; duplicates?: boolean }) => {
     try {
       const config = loadConfig(options.config);
 
@@ -435,6 +436,74 @@ program
           console.error("Error: Google Calendar not authenticated. Run 'connpass-watcher auth' first.");
           process.exit(1);
         }
+      }
+
+      // --duplicates: 重複イベントのみ削除
+      if (options.duplicates) {
+        console.log("\nSearching for duplicate connpass events in Google Calendar...\n");
+
+        const duplicateEvents = await calendarClient.findDuplicateConnpassEvents();
+
+        if (duplicateEvents.length === 0) {
+          console.log("No duplicate events found.");
+          return;
+        }
+
+        const toDelete = duplicateEvents.filter(e => e.isDuplicate);
+        const toKeep = duplicateEvents.filter(e => !e.isDuplicate);
+
+        console.log(`Found ${toKeep.length} events with duplicates:\n`);
+
+        // グループごとに表示
+        const grouped = new Map<string, typeof duplicateEvents>();
+        for (const event of duplicateEvents) {
+          const key = `${event.summary}|${event.start}`;
+          const existing = grouped.get(key) ?? [];
+          existing.push(event);
+          grouped.set(key, existing);
+        }
+
+        for (const [_key, events] of grouped) {
+          const kept = events.find(e => !e.isDuplicate);
+          const dups = events.filter(e => e.isDuplicate);
+          console.log(`  📅 ${kept?.summary}`);
+          console.log(`     📆 ${kept?.start}`);
+          console.log(`     ✅ Keep: ${kept?.id}`);
+          for (const dup of dups) {
+            console.log(`     🗑️  Delete: ${dup.id}`);
+          }
+          console.log();
+        }
+
+        console.log(`Total: ${toKeep.length} to keep, ${toDelete.length} to delete\n`);
+
+        if (options.dryRun) {
+          console.log("[Dry-run] No events were deleted.");
+          return;
+        }
+
+        console.log("Deleting duplicate events...\n");
+
+        let deletedCount = 0;
+        let failedCount = 0;
+
+        for (const event of toDelete) {
+          const success = await calendarClient.deleteEvent(event.id);
+          if (success) {
+            console.log(`  ✅ Deleted: ${event.summary}`);
+            deletedCount++;
+          } else {
+            console.log(`  ❌ Failed: ${event.summary}`);
+            failedCount++;
+          }
+        }
+
+        console.log(`\n=== Clear Results ===`);
+        console.log(`Deleted: ${deletedCount}`);
+        console.log(`Failed: ${failedCount}`);
+
+        logger.info({ deleted: deletedCount, failed: failedCount }, "Duplicate clear completed");
+        return;
       }
 
       // --from-calendar: Google Calendarから直接検索
