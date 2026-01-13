@@ -428,9 +428,10 @@ export class GoogleCalendarClient {
   }
 
   /**
-   * 既存のイベントかどうかをチェック (タイトルと日時で判定)
+   * 既存のイベントを検索 (タイトルと日時で判定)
+   * @returns 既存イベントのカレンダーID (見つからなければnull)
    */
-  async eventExists(event: EnrichedEvent): Promise<boolean> {
+  async findExistingEvent(event: EnrichedEvent): Promise<string | null> {
     const client = await this.initOAuth2Client();
     const calendar = google.calendar({ version: "v3", auth: client });
 
@@ -448,16 +449,54 @@ export class GoogleCalendarClient {
       );
 
       const events = result.data.items ?? [];
-      const exists = events.some((e) => e.summary?.includes(event.title));
+      const existingEvent = events.find((e) => e.summary?.includes(event.title));
 
-      if (exists) {
-        logger.debug({ eventId: event.id, calendarId: targetCalendarId }, "Event already exists in calendar");
+      if (existingEvent?.id) {
+        logger.debug(
+          { eventId: event.id, calendarEventId: existingEvent.id, calendarId: targetCalendarId },
+          "Found existing event in calendar",
+        );
+        return existingEvent.id;
       }
 
-      return exists;
+      return null;
     } catch (error) {
       logger.error({ error }, "Failed to check existing events");
-      return false; // エラー時は存在しないとみなす
+      return null;
     }
+  }
+
+  /**
+   * 既存のイベントかどうかをチェック (後方互換性のため残す)
+   */
+  async eventExists(event: EnrichedEvent): Promise<boolean> {
+    const existingId = await this.findExistingEvent(event);
+    return existingId !== null;
+  }
+
+  /**
+   * イベントを登録または更新 (upsert)
+   * 既存のイベントがあれば更新、なければ新規作成
+   */
+  async upsertEvent(
+    event: EnrichedEvent,
+    options?: { colorId?: string },
+  ): Promise<{ calendarEventId: string | null; action: "created" | "updated" | "skipped" }> {
+    if (!this.config.google_calendar.enabled) {
+      logger.debug({ eventId: event.id }, "Calendar integration disabled");
+      return { calendarEventId: null, action: "skipped" };
+    }
+
+    // 既存のイベントを検索
+    const existingEventId = await this.findExistingEvent(event);
+
+    if (existingEventId) {
+      // 既存イベントを更新
+      await this.updateEvent(existingEventId, event, options);
+      return { calendarEventId: existingEventId, action: "updated" };
+    }
+    // 新規作成
+    const newEventId = await this.addEvent(event, options);
+    return { calendarEventId: newEventId, action: "created" };
   }
 }

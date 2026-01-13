@@ -149,24 +149,23 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
       isPopular,
     });
 
-    // カレンダーに登録または更新
+    // カレンダーに登録または更新 (upsert: 既存イベントがあれば更新)
     let calendarEventId: string | undefined = existingRecord?.calendar_event_id ?? undefined;
-    let isUpdated = false;
+    let calendarAction: "created" | "updated" | "skipped" = "skipped";
+
     if (!options.dryRun && config.google_calendar.enabled) {
       try {
         const isAuth = await calendarClient.isAuthenticated();
         if (isAuth) {
-          if (needsReprocessing && calendarEventId) {
-            // 既存のカレンダーイベントを更新
-            await calendarClient.updateEvent(calendarEventId, event, colorId ? { colorId } : undefined);
-            isUpdated = true;
+          // upsertEvent: 既存イベントがあれば更新、なければ新規作成
+          const upsertResult = await calendarClient.upsertEvent(event, colorId ? { colorId } : undefined);
+          calendarEventId = upsertResult.calendarEventId ?? undefined;
+          calendarAction = upsertResult.action;
+
+          if (calendarAction === "created") {
+            logger.info({ eventId: event.id, calendarEventId }, "Calendar event created");
+          } else if (calendarAction === "updated") {
             logger.info({ eventId: event.id, calendarEventId }, "Calendar event updated");
-          } else if (!calendarEventId) {
-            // 新規登録 (重複チェック付き)
-            const exists = await calendarClient.eventExists(event);
-            if (!exists) {
-              calendarEventId = (await calendarClient.addEvent(event, colorId ? { colorId } : undefined)) ?? undefined;
-            }
           }
         }
       } catch (error) {
@@ -186,9 +185,9 @@ async function scanEvents(config: Config, options: ScanOptions): Promise<ScanRes
 
     // アクションを決定
     let action: ScanResult["action"];
-    if (isUpdated) {
+    if (calendarAction === "updated") {
       action = "updated";
-    } else if (calendarEventId && !needsReprocessing) {
+    } else if (calendarAction === "created") {
       action = "registered";
     } else {
       action = "skipped";
