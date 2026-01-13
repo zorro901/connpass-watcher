@@ -420,20 +420,16 @@ program
   .option("-c, --config <path>", "Path to config file")
   .option("--dry-run", "Show events to be deleted without actually deleting")
   .option("--all", "Delete all calendar events and clear processing history")
-  .action(async (options: { config?: string; dryRun?: boolean; all?: boolean }) => {
+  .option("--from-calendar", "Search events directly from Google Calendar (ignore local DB)")
+  .action(async (options: { config?: string; dryRun?: boolean; all?: boolean; fromCalendar?: boolean }) => {
     try {
       const config = loadConfig(options.config);
-
-      // DB初期化
-      const dbPath = join(homedir(), APP_DIR, DB_FILE);
-      const db = initializeDatabase(dbPath);
-      const eventRepo = new EventRepository(db);
 
       // カレンダークライアント初期化
       const calendarClient = new GoogleCalendarClient(config);
 
       // 認証チェック
-      if (!options.dryRun && config.google_calendar.enabled) {
+      if (config.google_calendar.enabled) {
         const isAuth = await calendarClient.isAuthenticated();
         if (!isAuth) {
           console.error("Error: Google Calendar not authenticated. Run 'connpass-watcher auth' first.");
@@ -441,11 +437,75 @@ program
         }
       }
 
+      // --from-calendar: Google Calendarから直接検索
+      if (options.fromCalendar) {
+        console.log("\nSearching for connpass events in Google Calendar...\n");
+
+        const calendarEvents = await calendarClient.findConnpassEvents();
+
+        if (calendarEvents.length === 0) {
+          console.log("No connpass events found in Google Calendar.");
+          return;
+        }
+
+        console.log(`Found ${calendarEvents.length} connpass events:\n`);
+
+        for (const event of calendarEvents) {
+          console.log(`  📅 ${event.summary}`);
+          console.log(`     📆 ${event.start}`);
+          console.log(`     ID: ${event.id}`);
+        }
+
+        if (options.dryRun) {
+          console.log("\n[Dry-run] No events were deleted.");
+          return;
+        }
+
+        console.log("\nDeleting calendar events...\n");
+
+        let deletedCount = 0;
+        let failedCount = 0;
+
+        for (const event of calendarEvents) {
+          const success = await calendarClient.deleteEvent(event.id);
+          if (success) {
+            console.log(`  ✅ Deleted: ${event.summary}`);
+            deletedCount++;
+          } else {
+            console.log(`  ❌ Failed: ${event.summary}`);
+            failedCount++;
+          }
+        }
+
+        console.log(`\n=== Clear Results ===`);
+        console.log(`Deleted: ${deletedCount}`);
+        console.log(`Failed: ${failedCount}`);
+
+        // --all: 処理履歴もクリア
+        if (options.all) {
+          const dbPath = join(homedir(), APP_DIR, DB_FILE);
+          const db = initializeDatabase(dbPath);
+          const eventRepo = new EventRepository(db);
+          const cleared = eventRepo.clearAllProcessedEvents();
+          console.log(`Cleared ${cleared} processed event records.`);
+          db.close();
+        }
+
+        logger.info({ deleted: deletedCount, failed: failedCount }, "Clear completed");
+        return;
+      }
+
+      // デフォルト: DBから検索
+      const dbPath = join(homedir(), APP_DIR, DB_FILE);
+      const db = initializeDatabase(dbPath);
+      const eventRepo = new EventRepository(db);
+
       // DBからカレンダー登録済みイベントを取得
       const eventsWithCalendar = eventRepo.getEventsWithCalendarId();
 
       if (eventsWithCalendar.length === 0) {
-        console.log("No calendar events to clear.");
+        console.log("No calendar events to clear in local DB.");
+        console.log("Hint: Use --from-calendar to search directly from Google Calendar.");
 
         if (options.all) {
           const cleared = eventRepo.clearAllProcessedEvents();

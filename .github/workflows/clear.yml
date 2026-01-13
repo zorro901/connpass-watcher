@@ -74,7 +74,7 @@ jobs:
 
       - name: Run clear
         run: |
-          ARGS=""
+          ARGS="--from-calendar"
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             ARGS="$ARGS --dry-run"
           fi

@@ -563,6 +563,73 @@ export class GoogleCalendarClient {
   }
 
   /**
+   * connpass-watcherが登録したイベントを検索
+   * descriptionに "connpass URL:" が含まれるイベントを取得
+   */
+  async findConnpassEvents(options?: {
+    timeMin?: string;
+    timeMax?: string;
+    maxResults?: number;
+  }): Promise<Array<{ id: string; summary: string; start: string; description?: string }>> {
+    const client = await this.initOAuth2Client();
+    const calendar = google.calendar({ version: "v3", auth: client });
+    const targetCalendarId = this.config.google_calendar.calendar_id;
+
+    const allEvents: Array<{ id: string; summary: string; start: string; description?: string }> = [];
+    let pageToken: string | undefined;
+
+    try {
+      do {
+        const listParams: {
+          calendarId: string;
+          maxResults: number;
+          singleEvents: boolean;
+          orderBy: "startTime";
+          timeMin?: string;
+          timeMax?: string;
+          q: string;
+          pageToken?: string;
+        } = {
+          calendarId: targetCalendarId,
+          maxResults: options?.maxResults ?? 250,
+          singleEvents: true,
+          orderBy: "startTime",
+          q: "connpass URL",
+        };
+
+        if (options?.timeMin) listParams.timeMin = options.timeMin;
+        if (options?.timeMax) listParams.timeMax = options.timeMax;
+        if (pageToken) listParams.pageToken = pageToken;
+
+        const result = await googleCalendarRateLimiter.schedule(() =>
+          calendar.events.list(listParams),
+        );
+
+        const events = result.data.items ?? [];
+        for (const e of events) {
+          // descriptionに "connpass URL:" が含まれるイベントのみ
+          if (e.id && e.summary && e.description?.includes("connpass URL:")) {
+            allEvents.push({
+              id: e.id,
+              summary: e.summary,
+              start: e.start?.dateTime ?? e.start?.date ?? "",
+              description: e.description,
+            });
+          }
+        }
+
+        pageToken = result.data.nextPageToken ?? undefined;
+      } while (pageToken);
+
+      logger.info({ count: allEvents.length }, "Found connpass events in calendar");
+      return allEvents;
+    } catch (error) {
+      logger.error({ error }, "Failed to find connpass events");
+      return [];
+    }
+  }
+
+  /**
    * イベントを登録または更新 (upsert)
    * 既存のイベントがあれば更新、なければ新規作成
    */
