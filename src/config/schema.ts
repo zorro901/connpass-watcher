@@ -36,12 +36,15 @@ export const configSchema = z.object({
     .object({
       enabled: z.boolean().default(true),
       calendar_id: z.string().default("primary"),
-      // Google Calendar の色ID
-      // 6: Tangerine (みかん), 9: Blueberry (ブルーベリー), 10: Basil (バジル)
-      color_popular: z.string().default("6"), // 人気イベント
-      color_speaker: z.string().default("9"), // 登壇機会あり
-      color_online: z.string().optional(), // オンライン参加可能（指定しなければ他の色を優先）
-      // 興味マッチのみはデフォルト色（colorIdなし）
+      // Google Calendar の色ID (イベント種別 × オンライン有無 = 6種類)
+      // 1: Lavender, 2: Sage, 3: Grape, 4: Flamingo, 5: Banana
+      // 6: Tangerine, 7: Peacock, 8: Graphite, 9: Blueberry, 10: Basil, 11: Tomato
+      color_speaker: z.string().default("9"), // 🎤 登壇機会あり（オフライン）
+      color_speaker_online: z.string().default("7"), // 🎤🌐 登壇機会あり（オンライン）
+      color_popular: z.string().default("6"), // 🔥 人気イベント（オフライン）
+      color_popular_online: z.string().default("5"), // 🔥🌐 人気イベント（オンライン）
+      color_interest: z.string().optional(), // 💡 興味あり（オフライン）- 省略でデフォルト色
+      color_interest_online: z.string().default("10"), // 💡🌐 興味あり（オンライン）
     })
     .default({}),
 

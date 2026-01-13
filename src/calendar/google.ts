@@ -246,23 +246,24 @@ export class GoogleCalendarClient {
 
   /**
    * イベントの種類に応じた色IDを取得
-   * 優先順位: 登壇機会 > 人気イベント > オンライン > デフォルト
+   * 6種類: (登壇/人気/興味) × (オフライン/オンライン)
    */
   getColorId(options: {
     hasSpeakerOpportunity: boolean;
     isPopular: boolean;
     isOnline?: boolean;
   }): string | undefined {
+    const calConfig = this.config.google_calendar;
+    const isOnline = options.isOnline ?? false;
+
     if (options.hasSpeakerOpportunity) {
-      return this.config.google_calendar.color_speaker;
+      return isOnline ? calConfig.color_speaker_online : calConfig.color_speaker;
     }
     if (options.isPopular) {
-      return this.config.google_calendar.color_popular;
+      return isOnline ? calConfig.color_popular_online : calConfig.color_popular;
     }
-    if (options.isOnline && this.config.google_calendar.color_online) {
-      return this.config.google_calendar.color_online;
-    }
-    return undefined; // デフォルト色
+    // 興味マッチ
+    return isOnline ? calConfig.color_interest_online : calConfig.color_interest;
   }
 
   /**
